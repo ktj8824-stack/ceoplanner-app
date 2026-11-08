@@ -7,19 +7,20 @@
   --navy-3: #2A3D5C;
   --porcelain: #EEF0F3;   /* 바탕 */
   --surface: #FFFFFF;
-  --brass: #A7864B;       /* 출발 시각 · 주요 버튼에만 */
+  --brass: #A7864B;       /* 장식용 (선 · 막대 · 테두리) */
+  --brass-ink: #80632C;   /* 글자 · 흰 글씨를 얹는 채움 (대비 4.5 이상) */
   --brass-soft: #F3EDE1;
   --signal: #B4442E;      /* 긴급 · 충돌 */
   --signal-soft: #F8E9E5;
-  --ok: #2F7A5B;
+  --ok: #276A4E;
   --ok-soft: #E5F1EB;
-  --amber: #A9661A;
+  --amber: #8F5512;
   --amber-soft: #FBF0E1;
   --private: #5B54B8;
   --private-soft: #ECEBF8;
   --ink: #0F1B2D;
   --ink-2: #334155;
-  --slate: #64748B;
+  --slate: #556274;
   --line: #E2E5EA;
   --line-2: #EDEFF2;
   --r-s: 6px;
@@ -54,7 +55,7 @@ a { color: inherit; }
 .btn:hover { border-color: #cfd4db; }
 .btn.primary { background: var(--navy); border-color: var(--navy); color: #fff; }
 .btn.primary:hover { background: var(--navy-2); }
-.btn.brass { background: var(--brass); border-color: var(--brass); color: #fff; }
+.btn.brass { background: var(--brass-ink); border-color: var(--brass-ink); color: #fff; }
 .btn.signal { background: var(--signal); border-color: var(--signal); color: #fff; }
 .btn.quiet { background: transparent; border-color: transparent; color: var(--slate); }
 .btn:disabled { opacity: .45; cursor: default; }

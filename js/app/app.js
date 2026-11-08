@@ -116,12 +116,14 @@ const App = {
     const list = this.dayPlan(this.day);
     const warns = Backtime.conflicts(Store.byDate(this.day).filter(s => s.status !== 'cancelled'));
     const now = new Date();
-    const warnHtml = warns.map(w => `<div class="conflict">${Icon.svg('alert', 16)}<span>${U.esc(w.msg)}</span></div>`).join('');
+    // 충돌 경고는 맨 위가 아니라 부딪히는 두 일정 사이에 표시
     const rows = list.map(({ s, p }) => {
       const state = p.endAt < now ? 'past' : p.startAt <= now ? 'now' : '';
-      return this.agRow(s, p, state);
+      const w = warns.find(x => x.b.id === s.id);
+      const note = w ? `<div class="conflict" role="note">${Icon.svg('alert', 16)}<span>${U.esc(w.msg)}</span></div>` : '';
+      return note + this.agRow(s, p, state);
     }).join('');
-    return warnHtml + `<section class="sheet">${rows || '<div class="empty-day">이 날은 일정이 없어요.</div>'}</section>
+    return `<section class="sheet">${rows || '<div class="empty-day">이 날은 일정이 없어요.</div>'}</section>
       <button class="add-private" data-addprivate>${Icon.svg('lock', 15)} 개인 일정 추가 · 비서에게는 '바쁨'으로 보여요</button>`;
   },
 
@@ -132,7 +134,7 @@ const App = {
     const now = new Date();
     const route = go ? `<ol class="route">${p.items.filter(it => !['start', 'end'].includes(it.kind)).map(it =>
       `<li class="${it.kind} ${it.at < now ? 'done' : ''}"><b>${U.hm(it.at)}</b>${Icon.kind(it.kind, 15)}<span>${U.esc(it.title)}${it.detail ? ` <small>${U.esc(it.detail)}</small>` : ''}</span></li>`).join('')}</ol>` : '';
-    const status = priv ? '<span class="badge private">개인</span>' : s.ackAt ? '<span class="badge ok">확인함</span>' : '<span class="badge warn">확인 필요</span>';
+    const status = priv ? '<span class="badge private">개인</span>' : s.ackAt ? '<span class="badge ok">확인함</span>' : '<span class="badge warn">확인 대기</span>';
     const sub = [s.location ? U.esc(s.location) : '', go ? mode.label : ''].filter(Boolean).join(' · ');
     const acts = [];
     if (!priv && !s.ackAt) acts.push(`<button class="confirm" data-ack="${s.id}">확인</button>`);
@@ -272,8 +274,8 @@ const App = {
     on('[data-pick]', el => { this.day = el.dataset.pick; this.view = 'timeline'; this.render(); });
     on('[data-ack]', safe(async el => { await Store.ack(el.dataset.ack); U.toast('확인했어요. 비서 화면에 표시돼요'); }));
     on('[data-brief]', el => this.briefing(el.dataset.brief));
-    on('[data-late]', safe(async el => { const s = Store.get(el.dataset.late); await Store.send(`'${s.title}' 10분 정도 늦을 것 같아요.`); U.toast('비서에게 보냈어요'); }));
-    on('[data-postpone]', safe(async el => { const s = Store.get(el.dataset.postpone); await Store.send(`'${s.title}' (${this.shortDate(s.date)} ${s.start}) 일정 미뤄 주세요.`); U.toast('비서에게 요청했어요'); }));
+    on('[data-late]', safe(async el => { const s = Store.get(el.dataset.late); await Store.send(`'${s.title}' 10분 정도 늦을 것 같아요.`, { ref: s.id }); U.toast('비서에게 보냈어요'); }));
+    on('[data-postpone]', safe(async el => { const s = Store.get(el.dataset.postpone); await Store.send(`'${s.title}' (${this.shortDate(s.date)} ${s.start}) 일정 미뤄 주세요.`, { ref: s.id }); U.toast('비서에게 요청했어요'); }));
     on('[data-addprivate]', () => this.addPrivate());
     on('[data-delprivate]', safe(async el => { if (confirm('이 개인 일정을 삭제할까요?')) { await Store.remove(el.dataset.delprivate); U.toast('삭제했어요'); } }));
     on('[data-quick]', safe(async el => { await Store.send(el.dataset.quick); }));

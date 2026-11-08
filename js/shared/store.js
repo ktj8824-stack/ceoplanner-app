@@ -94,10 +94,11 @@ const Store = {
     }
   },
 
-  async send(body, { urgent = false } = {}) {
-    const msg = { id: U.uid(), from: this.role, body: String(body).slice(0, 1000), urgent, at: new Date().toISOString() };
+  /** ref: 관련 일정 id (비서 웹에서 '일정 열기'로 바로 이동) */
+  async send(body, { urgent = false, ref = null } = {}) {
+    const msg = { id: U.uid(), from: this.role, body: String(body).slice(0, 1000), urgent, ref, at: new Date().toISOString() };
     if (this.mode === 'supabase') {
-      const { error } = await this.client.from('messages').insert({ ceo_id: this.ceoId, sender_id: this.user.id, sender_role: this.role, body: msg.body, urgent });
+      const { error } = await this.client.from('messages').insert({ ceo_id: this.ceoId, sender_id: this.user.id, sender_role: this.role, body: msg.body, urgent, ref_id: ref });
       if (error) throw error;
       await this._reload();
     } else {
@@ -164,7 +165,7 @@ const Store = {
     this.data = {
       profile: { name: prof.data?.name, ...(prof.data?.settings || {}) },
       schedules: (sch.data || []).map(r => this._fromRow(r)),
-      messages: (msg.data || []).map(r => ({ id: r.id, from: r.sender_role, body: r.body, urgent: r.urgent, at: r.created_at })),
+      messages: (msg.data || []).map(r => ({ id: r.id, from: r.sender_role, body: r.body, urgent: r.urgent, ref: r.ref_id, at: r.created_at })),
     };
   },
 
