@@ -1,0 +1,10 @@
+{
+  "name": "CEO플래너",
+  "short_name": "CEO플래너",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f4f5f7",
+  "theme_color": "#1b2a4a",
+  "lang": "ko",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
