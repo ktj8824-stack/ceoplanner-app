@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#1b2a4a">
+  <meta name="theme-color" content="#0F1B2D">
   <title>CEO플래너</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg">
@@ -12,16 +12,12 @@
 </head>
 <body class="app">
   <div id="root"></div>
-  <nav class="tabs" id="tabs">
-    <button data-tab="home" class="on"><span class="i">🏠</span>홈</button>
-    <button data-tab="chat"><span class="i">💬</span>비서톡</button>
-    <button data-tab="sos" class="sos-tab"><span class="i">🚨</span>긴급</button>
-    <button data-tab="me"><span class="i">👤</span>내 정보</button>
-  </nav>
+  <nav class="tabs" id="tabs" aria-label="메뉴"></nav>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/shared/config.js"></script>
   <script src="js/shared/utils.js"></script>
+  <script src="js/shared/icons.js"></script>
   <script src="js/shared/backtime.js"></script>
   <script src="js/shared/demo.js"></script>
   <script src="js/shared/store.js"></script>

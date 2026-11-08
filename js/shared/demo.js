@@ -7,7 +7,7 @@ const Demo = {
     const t = U.today(), d1 = U.addDays(t, 1), d2 = U.addDays(t, 2);
     const S = (o) => ({ id: U.uid(), visibility: 'normal', bufferMin: 10, status: 'scheduled', ackAt: null, briefing: {}, createdBy: 'secretary', ...o });
     return {
-      profile: { name: '김대표', prepMin: 60, secretaryName: '이비서', secretaryPhone: '010-0000-0001', driverName: '박기사', driverPhone: '010-0000-0002' },
+      profile: { name: '김대표', prepMin: 60, ceoPhone: '010-0000-0000', secretaryName: '이비서', secretaryPhone: '010-0000-0001', driverName: '박기사', driverPhone: '010-0000-0002' },
       schedules: [
         S({ title: '주간 임원 회의', category: 'meeting', date: t, start: '08:30', end: '09:30', location: '본사 15층 대회의실', mode: 'none', ackAt: new Date().toISOString() }),
         S({ title: '한빛전자 협력 미팅', category: 'external', date: t, start: '11:00', end: '12:00', location: '한빛전자 삼성동 사옥', mode: 'driver', travelMin: 35,
