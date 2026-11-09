@@ -7,13 +7,14 @@
    ========================================= */
 const Store = {
   KEY: 'CEOP_DATA_V1',
-  role: 'ceo',          // 'ceo' | 'secretary'
+  role: 'ceo',          // 'ceo' | 'secretary' | 'driver'
   mode: 'demo',         // 'demo' | 'supabase'
   data: null,
   client: null,
   user: null,
   ceoId: null,
   needsLogin: false,
+  loginError: null,
   _subs: [],
 
   async init(role) {
@@ -24,7 +25,8 @@ const Store = {
       this.client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_KEY);
       const { data } = await this.client.auth.getSession();
       if (!data.session) { this.needsLogin = true; this.data = this._empty(); return; }
-      await this._afterLogin(data.session.user);
+      try { await this._afterLogin(data.session.user); }
+      catch (err) { await this.client.auth.signOut(); this.loginError = err.message; this.needsLogin = true; this.data = this._empty(); }
     } else {
       this.mode = 'demo';
       this._loadDemo();
@@ -59,7 +61,7 @@ const Store = {
     // 비서가 수정하면 CEO 확인을 다시 받음
     if (this.role === 'secretary') s.ackAt = null;
     if (this.mode === 'supabase') {
-      const { error } = await this.client.from('schedules').upsert(this._toRow(s));
+      const { error } = await this.client.from('ceo_schedules').upsert(this._toRow(s));
       if (error) throw error;
       await this._reload();
     } else {
@@ -72,7 +74,7 @@ const Store = {
 
   async remove(id) {
     if (this.mode === 'supabase') {
-      const { error } = await this.client.from('schedules').delete().eq('id', id);
+      const { error } = await this.client.from('ceo_schedules').delete().eq('id', id);
       if (error) throw error;
       await this._reload();
     } else {
@@ -86,7 +88,7 @@ const Store = {
     if (this.mode === 'supabase') {
       const map = { nudgedAt: 'nudged_at' };
       const row = Object.fromEntries(Object.entries(fields).map(([k, v]) => [map[k] || k, v]));
-      const { error } = await this.client.from('schedules').update(row).eq('id', id);
+      const { error } = await this.client.from('ceo_schedules').update(row).eq('id', id);
       if (error) throw error;
       await this._reload();
     } else {
@@ -99,7 +101,7 @@ const Store = {
   async ack(id) {
     const at = new Date().toISOString();
     if (this.mode === 'supabase') {
-      const { error } = await this.client.from('schedules').update({ ack_at: at }).eq('id', id);
+      const { error } = await this.client.from('ceo_schedules').update({ ack_at: at }).eq('id', id);
       if (error) throw error;
       await this._reload();
     } else {
@@ -112,7 +114,7 @@ const Store = {
   async send(body, { urgent = false, ref = null } = {}) {
     const msg = { id: U.uid(), from: this.role, body: String(body).slice(0, 1000), urgent, ref, at: new Date().toISOString() };
     if (this.mode === 'supabase') {
-      const { error } = await this.client.from('messages').insert({ ceo_id: this.ceoId, sender_id: this.user.id, sender_role: this.role, body: msg.body, urgent, ref_id: ref });
+      const { error } = await this.client.from('ceo_messages').insert({ ceo_id: this.ceoId, sender_id: this.user.id, sender_role: this.role, body: msg.body, urgent, ref_id: ref });
       if (error) throw error;
       await this._reload();
     } else {
@@ -124,7 +126,8 @@ const Store = {
   async saveProfile(patch) {
     this.data.profile = { ...this.data.profile, ...patch };
     if (this.mode === 'supabase') {
-      const { error } = await this.client.from('profiles').update({ settings: this.data.profile }).eq('id', this.ceoId);
+      if (this.role !== 'ceo') return; // 대표 설정은 대표만 바꿈
+      const { error } = await this.client.from('ceo_profiles').update({ settings: Object.fromEntries(Object.entries(this.data.profile).filter(([k]) => k !== 'name')) }).eq('id', this.ceoId);
       if (error) throw error;
     } else this._saveDemo();
   },
@@ -142,27 +145,42 @@ const Store = {
   _saveDemo() { localStorage.setItem(this.KEY, JSON.stringify(this.data)); this._emit(); },
 
   // ───────── Supabase 모드 ─────────
-  async signIn(email, password) {
-    const { data, error } = await this.client.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    this.needsLogin = false;
-    await this._afterLogin(data.user);
+  /** 발급받은 아이디 → 내부 로그인 주소 (예: kim → kim@ceoplanner.invalid) */
+  loginEmail(id) {
+    const v = String(id || '').trim().toLowerCase();
+    return v.includes('@') ? v : v + '@' + ((window.CEOP_CONFIG || {}).LOGIN_DOMAIN || 'ceoplanner.invalid');
+  },
+  async signIn(id, password) {
+    const { data, error } = await this.client.auth.signInWithPassword({ email: this.loginEmail(id), password });
+    if (error) throw new Error(/invalid/i.test(error.message) ? '아이디 또는 비밀번호가 맞지 않아요.' : error.message);
+    try { await this._afterLogin(data.user); }
+    catch (err) { await this.client.auth.signOut(); throw err; }
+    this.needsLogin = false; this.loginError = null;
     this._emit();
   },
   async signOut() { if (this.client) await this.client.auth.signOut(); location.reload(); },
 
   async _afterLogin(user) {
     this.user = user;
+    // CEO플래너에 등록된 계정인지, 이 화면에 맞는 역할인지 확인 (같은 서버의 다른 앱 계정은 막힘)
+    const me = await this.client.from('ceo_profiles').select('role').eq('id', user.id).maybeSingle();
+    if (me.error) throw me.error;
+    if (!me.data) throw new Error('CEO플래너 계정이 아니에요. 회사에서 받은 아이디로 로그인해 주세요.');
+    if (me.data.role !== this.role) {
+      const where = { ceo: '대표 앱', secretary: '비서 웹', driver: '기사 화면(준비 중)' }[me.data.role];
+      throw new Error(`이 아이디는 ${where}용이에요.`);
+    }
     if (this.role === 'ceo') this.ceoId = user.id;
     else {
-      const { data, error } = await this.client.from('ceo_secretaries').select('ceo_id').eq('secretary_id', user.id).limit(1);
+      const { data, error } = await this.client.from('ceo_links').select('ceo_id').eq('member_id', user.id).eq('role', this.role).limit(1);
       if (error) throw error;
       this.ceoId = data && data[0] ? data[0].ceo_id : null;
+      if (!this.ceoId) throw new Error('연결된 대표가 없어요. 관리자에게 연결을 요청해 주세요.');
     }
     await this._reload();
     this.client.channel('ceop-' + this.ceoId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules', filter: `ceo_id=eq.${this.ceoId}` }, () => this._reload().then(() => this._emit()))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `ceo_id=eq.${this.ceoId}` }, () => this._reload().then(() => this._emit()))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ceo_schedules', filter: `ceo_id=eq.${this.ceoId}` }, () => this._reload().then(() => this._emit()))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ceo_messages', filter: `ceo_id=eq.${this.ceoId}` }, () => this._reload().then(() => this._emit()))
       .subscribe();
   },
 
@@ -170,9 +188,9 @@ const Store = {
     if (!this.ceoId) { this.data = this._empty(); return; }
     // schedule_feed 뷰: 비서에게는 개인 일정을 서버에서 '바쁨'으로 가려서 내려줌
     const [sch, msg, prof] = await Promise.all([
-      this.client.from('schedule_feed').select('*').eq('ceo_id', this.ceoId),
-      this.client.from('messages').select('*').eq('ceo_id', this.ceoId).order('created_at', { ascending: true }).limit(300),
-      this.client.from('profiles').select('name, settings').eq('id', this.ceoId).single(),
+      this.client.from('ceo_schedule_feed').select('*').eq('ceo_id', this.ceoId),
+      this.client.from('ceo_messages').select('*').eq('ceo_id', this.ceoId).order('created_at', { ascending: true }).limit(300),
+      this.client.from('ceo_profiles').select('name, settings').eq('id', this.ceoId).single(),
     ]);
     if (sch.error) throw sch.error;
     if (msg.error) throw msg.error;

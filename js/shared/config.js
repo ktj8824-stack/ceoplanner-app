@@ -14,6 +14,7 @@
   window.CEOP_CONFIG = Object.freeze({
     SUPABASE_URL: '',
     SUPABASE_KEY: '', // sb_publishable_... 키만
+    LOGIN_DOMAIN: 'ceoplanner.invalid', // 발급 아이디 kim → kim@ceoplanner.invalid (스스로 가입 · 카카오/구글 없음)
     APP_URL: isDev ? './index.html' : APP,
     SECRETARY_URL: isDev ? './secretary.html' : WEB,
   });
