@@ -1,20 +1,25 @@
 /* =========================================
    CEO플래너 — CEO 앱 (모바일)
    아래 메뉴: 홈 · 비서톡 · 긴급 · 내 정보
-   홈: 다음 출발 시각(크게) + 일정표(타임라인) / 세로 캘린더
+   홈: 다음 출발(크게) + 확인 버튼 + 오늘 일정
+       다음 일정만 펼치고, 끝난 일정 · 나머지는 한 줄 (누르면 펼침)
    입력은 비서가 하고, 대표는 확인 · 요청 · 개인 일정만.
    ========================================= */
 const App = {
   tab: 'home',
   view: 'timeline',   // 'timeline' | 'calendar'
   day: U.today(),
+  openId: null,       // 사용자가 펼친 일정
   seenMsgs: 0,
   _timers: [],
 
   TABS: [['home', 'home', '홈'], ['chat', 'chat', '비서톡'], ['sos', 'siren', '긴급'], ['me', 'user', '내 정보']],
+  SIZES: { m: ['보통', 1], l: ['크게', 1.1], xl: ['아주 크게', 1.22] },
+  PREP: [30, 45, 60, 75, 90, 120],
 
   async start() {
     const root = document.getElementById('root');
+    this.applySize();
     try { await Store.init('ceo'); }
     catch (e) { root.innerHTML = `<p style="padding:20px">연결 오류: ${U.esc(e.message || e)}</p>`; return; }
     if (Store.needsLogin) return Login.render(root, 'CEO플래너 로그인', () => this.boot());
@@ -24,7 +29,7 @@ const App = {
   boot() {
     this.seenMsgs = Number(localStorage.getItem('CEOP_SEEN_CEO') || 0);
     const nav = document.getElementById('tabs');
-    nav.innerHTML = this.TABS.map(([k, ic, l]) => `<button data-tab="${k}" class="${k === 'sos' ? 'sos-tab' : ''}">${Icon.svg(ic, 22)}<span>${l}</span></button>`).join('');
+    nav.innerHTML = this.TABS.map(([k, ic, l]) => `<button data-tab="${k}" class="${k === 'sos' ? 'sos-tab' : ''}">${Icon.svg(ic, 24)}<span>${l}</span></button>`).join('');
     nav.addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) this.go(b.dataset.tab); });
     Store.on(() => { this.render(); this.scheduleAlerts(); });
     this.render();
@@ -37,6 +42,12 @@ const App = {
     this.render();
     window.scrollTo(0, tab === 'chat' ? document.body.scrollHeight : 0);
   },
+
+  // 글자 크기 — 이 기기에만 저장 (보통 · 크게 · 아주 크게, 기본 크게)
+  size() { return this.SIZES[localStorage.getItem('CEOP_FONT')] ? localStorage.getItem('CEOP_FONT') : 'l'; },
+  applySize() { document.getElementById('root').style.zoom = this.SIZES[this.size()][1]; },
+
+  notifState() { return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission; },
 
   render() {
     document.querySelectorAll('#tabs button').forEach(b => { b.classList.toggle('on', b.dataset.tab === this.tab); b.setAttribute('aria-current', b.dataset.tab === this.tab ? 'page' : 'false'); });
@@ -60,29 +71,31 @@ const App = {
     return null;
   },
 
-  // ───────── 홈 ─────────
-  home() {
-    return this.hero() + `<div class="body">
-      <div class="toolbar">
-        <div class="seg" role="tablist"><button data-view="timeline" class="${this.view === 'timeline' ? 'on' : ''}">일정표</button><button data-view="calendar" class="${this.view === 'calendar' ? 'on' : ''}">캘린더</button></div>
-        ${this.view === 'timeline' ? `<div class="daynav"><button data-day="-1" aria-label="전날">${Icon.svg('left', 18)}</button><b>${this.shortDate(this.day)}</b><button data-day="1" aria-label="다음 날">${Icon.svg('right', 18)}</button></div>` : ''}
-      </div>
-      ${this.view === 'timeline' ? this.timeline() : this.calendar()}</div>`;
+  dateTitle(ymd) {
+    const d = U.at(ymd, '00:00');
+    return `${d.getMonth() + 1}월 ${d.getDate()}일 (${U.WEEK[d.getDay()]})`;
   },
 
-  shortDate(ymd) {
-    const d = U.at(ymd, '00:00');
-    const rel = ymd === U.today() ? '오늘' : ymd === U.addDays(U.today(), 1) ? '내일' : ymd === U.addDays(U.today(), -1) ? '어제' : U.WEEK[d.getDay()] + '요일';
-    return `${d.getMonth() + 1}월 ${d.getDate()}일 ${rel}`;
+  /** 이 일정에 대해 대표가 이미 보낸 요청이 있는지 (조정 요청 등) */
+  sentAbout(id, word) { return Store.messages().some(m => m.from === 'ceo' && m.ref === id && m.body.includes(word)); },
+
+  // ───────── 홈 ─────────
+  home() {
+    return this.hero() + `<div class="body">${this.view === 'timeline' ? this.dayList() : this.calendar()}</div>`;
+  },
+
+  notifBanner(where) {
+    const n = this.notifState();
+    if (n === 'granted' || n === 'unsupported') return '';
+    return `<button class="notif-banner ${where}" data-notif>${Icon.svg('bell', 18)}<span>기상 · 출발 알림이 ${n === 'denied' ? '차단돼 있어요' : '꺼져 있어요'}</span><u>${n === 'denied' ? '방법 보기' : '켜기'}</u></button>`;
   },
 
   hero() {
     const p = this.profile();
     const now = new Date();
-    const d = U.at(U.today(), '00:00');
-    const top = `<div class="hero-top"><span class="hero-date">${d.getMonth() + 1}월 ${d.getDate()}일 ${U.WEEK[d.getDay()]}요일</span><span class="hero-name">${U.esc(p.name || '대표')}님</span></div>`;
+    const top = `<div class="hero-top"><span>${this.dateTitle(U.today())}</span><span>${U.esc(p.name || '대표')}님</span></div>`;
     const n = this.next();
-    if (!n) return `<header class="hero rest">${top}<p class="hero-label">남은 일정</p><div class="hero-time"><b>오늘은 끝났어요</b></div>
+    if (!n) return `<header class="hero rest">${top}${this.notifBanner('in-hero')}<p class="hero-label">남은 일정</p><div class="hero-time"><b>오늘은 끝났어요</b></div>
       <div class="hero-meta">내일 일정은 비서가 정리하면 여기에 표시돼요.</div></header>`;
     const { s, p: pl } = n;
     const moving = s.mode !== 'none' && pl.leaveAt > now;
@@ -90,70 +103,95 @@ const App = {
     const left = U.diffMin(target, now);
     const label = moving ? (s.date === U.today() ? '다음 출발' : '내일 첫 출발') : left > 0 ? (s.date === U.today() ? '다음 일정' : '내일 첫 일정') : '진행 중';
     const leftTxt = left > 0 ? `${U.durLabel(left)} 남음` : `${s.end}까지`;
-    const fill = left > 0 ? Math.max(4, Math.min(100, 100 - left / 180 * 100)) : 100;
     const priv = s.visibility === 'private';
-    const acked = !!s.ackAt || priv;
-    const meta = [];
-    meta.push(`${s.start} 시작`);
-    if (s.location) meta.push(U.esc(s.location));
-    if (moving && pl.driverCallAt) meta.push(`기사님 ${U.hm(pl.driverCallAt)} 대기`);
-    if (moving && pl.wakeAt && pl.wakeAt > now) meta.push(`기상 ${U.hm(pl.wakeAt)}`);
+    const driver = moving && pl.driverCallAt
+      ? `<div class="hero-driver">${Icon.svg('car', 17)}${U.esc(p.driverName || '기사')}님이 ${U.hm(pl.driverCallAt)}부터 ${pl.driverCallAt <= now ? '대기 중' : '대기 예정'}</div>` : '';
+    const wake = moving && pl.wakeAt && pl.wakeAt > now ? `<div class="hero-sub">기상 ${U.hm(pl.wakeAt)} · 준비 ${U.durLabel(p.prepMin || 60)}</div>` : '';
     const hasBrief = s.briefing && s.briefing.who;
-    return `<header class="hero">${top}
+    return `<header class="hero">${top}${this.notifBanner('in-hero')}
       <p class="hero-label">${label}</p>
-      <div class="hero-time"><b>${U.hm(target)}</b><span>${leftTxt}</span></div>
-      <div class="hero-bar" aria-hidden="true"><i style="width:${fill}%"></i></div>
-      <div class="hero-what">${U.esc(s.title)}</div>
-      <div class="hero-meta">${meta.join(' · ')}</div>
+      <div class="hero-time"><b>${U.hm(target)}</b><span class="pill">${leftTxt}</span></div>
+      <div class="hero-what">
+        <strong>${U.esc(s.title)}</strong>
+        <div class="hero-sub">${s.start} 시작${s.location ? ' · ' + U.esc(s.location) : ''}</div>
+        ${driver}${wake}
+      </div>
+      ${priv ? '' : `<button class="hero-confirm ${s.ackAt ? 'done' : ''}" data-ack="${s.id}" ${s.ackAt ? 'disabled' : ''}>${s.ackAt ? `${Icon.svg('check', 18)} 확인했어요 · 비서에게 전달됨` : '이 일정 확인했어요'}</button>`}
       <div class="hero-actions">
-        ${priv ? '' : `<button class="btn ${acked ? '' : 'go'}" data-ack="${s.id}" ${acked ? 'disabled' : ''}>${acked ? `${Icon.svg('check', 16)} 확인함` : '확인'}</button>`}
         ${priv ? '' : `<button class="btn" data-late="${s.id}">10분 늦어요</button>`}
-        ${hasBrief ? `<button class="btn" data-brief="${s.id}">${Icon.svg('file', 16)} 브리핑</button>` : s.location ? `<a class="btn" href="${U.tmapLink(s.location)}">${Icon.svg('nav', 16)} 길안내</a>` : ''}
+        ${hasBrief ? `<button class="btn" data-brief="${s.id}">${Icon.svg('file', 17)} 미팅 브리핑</button>` : s.location ? `<a class="btn" href="${U.tmapLink(s.location)}">${Icon.svg('nav', 17)} 길안내</a>` : ''}
       </div></header>`;
   },
 
-  timeline() {
+  dayList() {
+    const isToday = this.day === U.today();
     const list = this.dayPlan(this.day);
     const warns = Backtime.conflicts(Store.byDate(this.day).filter(s => s.status !== 'cancelled'));
     const now = new Date();
-    // 충돌 경고는 맨 위가 아니라 부딪히는 두 일정 사이에 표시
+    const auto = (list.find(({ p }) => p.endAt > now) || {}).s;
+    const openId = this.openId && list.some(x => x.s.id === this.openId) ? this.openId : auto && auto.id;
+    const next = this.next();
+    const head = `<div class="list-head">
+        ${isToday ? '' : `<button class="link" data-today>${Icon.svg('left', 16)} 오늘</button>`}
+        <h2>${isToday ? '오늘' : this.dateTitle(this.day)} 일정 ${list.length}건</h2>
+        <button class="link" data-view="calendar">캘린더 ${Icon.svg('chevron', 16)}</button></div>`;
     const rows = list.map(({ s, p }) => {
-      const state = p.endAt < now ? 'past' : p.startAt <= now ? 'now' : '';
       const w = warns.find(x => x.b.id === s.id);
-      const note = w ? `<div class="conflict" role="note">${Icon.svg('alert', 16)}<span>${U.esc(w.msg)}</span></div>` : '';
-      return note + this.agRow(s, p, state);
+      const past = p.endAt < now;
+      let html = w ? this.conflictBox(w) : '';
+      if (past) html += this.rowPast(s);
+      else if (s.id === openId) html += this.card(s, p, next && next.s.id === s.id);
+      else html += this.row(s);
+      return html;
     }).join('');
-    return `<section class="sheet">${rows || '<div class="empty-day">이 날은 일정이 없어요.</div>'}</section>
-      <button class="add-private" data-addprivate>${Icon.svg('lock', 15)} 개인 일정 추가 · 비서에게는 '바쁨'으로 보여요</button>`;
+    return head + (rows || '<div class="empty-day">이 날은 일정이 없어요.</div>') +
+      `<button class="add-private" data-addprivate>${Icon.svg('plus', 16)} 개인 일정 추가</button>`;
   },
 
-  agRow(s, p, state) {
+  conflictBox(w) {
+    const asked = this.sentAbout(w.b.id, '조정');
+    const name = this.profile().secretaryName || '비서';
+    return `<div class="conflict" role="note"><p>${Icon.svg('alert', 18)}<span>${U.esc(w.msg)}</span></p>
+      <button class="${asked ? 'sent' : ''}" data-adjust="${w.b.id}" data-prev="${w.a.id}" ${asked ? 'disabled' : ''}>${asked ? `${Icon.svg('check', 16)} 조정 요청 보냄 · ${U.esc(name)} 확인 중` : '비서에게 조정 요청'}</button></div>`;
+  },
+
+  rowPast(s) {
+    return `<div class="row past"><span class="t">${s.start}</span><span class="n">${U.esc(s.title)}</span><span class="done">${Icon.svg('check', 16)} 끝남</span></div>`;
+  },
+
+  row(s) {
+    const priv = s.visibility === 'private';
+    if (priv) return `<div class="row private" data-open="${s.id}"><span class="t">${s.start}</span><span class="n">${Icon.svg('lock', 16)} ${U.esc(s.title)}</span><span class="tag">비서에겐 '바쁨'</span></div>`;
+    const sub = s.ackAt ? U.esc(s.location || '') : `<em>확인 대기</em>${s.location ? ' · ' + U.esc(s.location) : ''}`;
+    return `<div class="row" data-open="${s.id}"><span class="t">${s.start}</span>
+      <span class="n">${U.esc(s.title)}<small>${sub}</small></span>
+      ${s.ackAt ? `<span class="ok">${Icon.svg('check', 16)} 확인함</span>` : `<button class="mini" data-ack="${s.id}">확인</button>`}</div>`;
+  },
+
+  card(s, p, isNext) {
     const priv = s.visibility === 'private';
     const mode = Backtime.MODES[s.mode] || Backtime.MODES.none;
     const go = s.mode !== 'none';
     const now = new Date();
-    const route = go ? `<ol class="route">${p.items.filter(it => !['start', 'end'].includes(it.kind)).map(it =>
-      `<li class="${it.kind} ${it.at < now ? 'done' : ''}"><b>${U.hm(it.at)}</b>${Icon.kind(it.kind, 15)}<span>${U.esc(it.title)}${it.detail ? ` <small>${U.esc(it.detail)}</small>` : ''}</span></li>`).join('')}</ol>` : '';
-    const status = priv ? '<span class="badge private">개인</span>' : s.ackAt ? '<span class="badge ok">확인함</span>' : '<span class="badge warn">확인 대기</span>';
-    const sub = [s.location ? U.esc(s.location) : '', go ? mode.label : ''].filter(Boolean).join(' · ');
+    const steps = go ? p.items.filter(it => !['start', 'end'].includes(it.kind)) : [];
+    const route = steps.length ? `<ol class="route">${steps.map(it =>
+      `<li class="${it.kind} ${it.at < now ? 'done' : ''}"><b>${U.hm(it.at)}</b><span>${U.esc(it.title)}${it.detail ? ` <small>${U.esc(it.detail)}</small>` : ''}</span></li>`).join('')}</ol>` : '';
+    const badge = priv ? `<span class="tag">비서에겐 '바쁨'</span>` : isNext ? '<span class="badge next">다음 일정</span>' : s.ackAt ? '<span class="badge ok">확인함</span>' : '<span class="badge warn">확인 대기</span>';
     const acts = [];
-    if (!priv && !s.ackAt) acts.push(`<button class="confirm" data-ack="${s.id}">확인</button>`);
-    if (s.briefing && s.briefing.who) acts.push(`<button data-brief="${s.id}">${Icon.svg('file', 15)} 브리핑</button>`);
-    if (s.location) acts.push(`<a href="${U.tmapLink(s.location)}">${Icon.svg('nav', 15)} 길안내</a>`);
-    if (!priv) acts.push(`<button data-postpone="${s.id}">변경 요청</button>`);
+    if (!priv && !s.ackAt && !isNext) acts.push(`<button class="primary" data-ack="${s.id}">확인</button>`);
+    if (s.briefing && s.briefing.who && !isNext) acts.push(`<button data-brief="${s.id}">${Icon.svg('file', 16)} 브리핑</button>`);
+    if (s.location) acts.push(`<a href="${U.tmapLink(s.location)}">${Icon.svg('nav', 16)} 길안내</a>`);
+    if (!priv) acts.push(`<button data-postpone="${s.id}" ${this.sentAbout(s.id, '미뤄') ? 'disabled' : ''}>${this.sentAbout(s.id, '미뤄') ? '변경 요청 보냄' : '변경 요청'}</button>`);
     else acts.push(`<button data-delprivate="${s.id}">삭제</button>`);
-    return `<article class="ag ${state} ${priv ? 'private' : ''}">
-      <div class="ag-time"><b>${s.start}</b><small>${s.end}</small></div>
-      <div class="ag-body">
-        <div class="ag-title">${Icon.cat(s.category, 17)}<h3>${U.esc(s.title)}</h3>${status}</div>
-        ${sub ? `<div class="ag-sub">${sub}</div>` : ''}
-        ${state === 'past' ? '' : route}
-        ${state === 'past' ? '' : `<div class="ag-actions">${acts.join('')}</div>`}
-      </div></article>`;
+    return `<article class="card ${isNext ? 'is-next' : ''} ${priv ? 'private' : ''}">
+      <div class="card-top"><span class="t"><b>${s.start}</b><small>${s.end}</small></span>
+        <span class="n"><strong>${priv ? Icon.svg('lock', 16) + ' ' : ''}${U.esc(s.title)}</strong><small>${[s.location ? U.esc(s.location) : '', go ? mode.label : ''].filter(Boolean).join(' · ')}</small></span>${badge}</div>
+      ${route}<div class="card-actions">${acts.join('')}</div>
+      ${this.openId === s.id ? `<button class="fold" data-fold>접기</button>` : ''}</article>`;
   },
 
   calendar() {
-    let html = '<section class="sheet">';
+    let html = `<div class="list-head"><button class="link" data-view="timeline">${Icon.svg('left', 16)} 오늘 일정</button><h2>앞으로 3주</h2><span></span></div><section class="sheet">`;
     for (let i = 0; i < 21; i++) {
       const ymd = U.addDays(U.today(), i);
       const d = U.at(ymd, '00:00');
@@ -172,8 +210,10 @@ const App = {
     this.seenMsgs = msgs.length;
     localStorage.setItem('CEOP_SEEN_CEO', String(msgs.length));
     const name = this.profile().secretaryName || '비서';
-    const list = msgs.map(m => `<div class="msg ${m.from === 'ceo' ? 'me' : 'them'} ${m.urgent ? 'urgent' : ''}">${U.esc(m.body)}<small>${m.urgent ? '긴급 · ' : ''}${U.hm(new Date(m.at))}</small></div>`).join('')
-      || `<p class="muted small" style="text-align:center">${U.esc(name)}님에게 보낸 메시지가 여기에 표시돼요.</p>`;
+    const list = msgs.map(m => {
+      const ref = m.ref && Store.get(m.ref);
+      return `<div class="msg ${m.from === 'ceo' ? 'me' : 'them'} ${m.urgent ? 'urgent' : ''}">${U.esc(m.body)}${ref && m.from !== 'ceo' ? `<button class="ref" data-goto="${U.esc(m.ref)}">${Icon.svg('calendar', 14)} 일정 보기</button>` : ''}<small>${m.urgent ? '긴급 · ' : ''}${U.hm(new Date(m.at))}</small></div>`;
+    }).join('') || `<p class="muted small" style="text-align:center">${U.esc(name)}님에게 보낸 메시지가 여기에 표시돼요.</p>`;
     return `<header class="page-head"><h1>비서톡</h1><p>${U.esc(name)}</p></header>
       <div class="chat">${list}</div>
       <div class="composer"><div class="quick">${this.QUICK.map(q => `<button data-quick="${U.esc(q)}">${U.esc(q)}</button>`).join('')}</div>
@@ -184,8 +224,7 @@ const App = {
     const btn = document.querySelector('#tabs button[data-tab="chat"]');
     if (!btn) return;
     btn.querySelector('.dot')?.remove();
-    const msgs = Store.messages();
-    const unread = msgs.slice(this.seenMsgs).some(m => m.from !== 'ceo');
+    const unread = Store.messages().slice(this.seenMsgs).some(m => m.from !== 'ceo');
     if (unread && this.tab !== 'chat') btn.insertAdjacentHTML('beforeend', '<span class="dot"></span>');
   },
 
@@ -194,9 +233,9 @@ const App = {
     const p = this.profile();
     return `<header class="page-head"><h1>긴급</h1><p>누르면 바로 연결돼요</p></header>
       <div class="list">
-        <button class="list-row danger" data-urgent><span class="ico">${Icon.svg('siren', 20)}</span><span class="t"><b>비서에게 긴급 요청</b><small>'지금 바로 연락 주세요'를 바로 보내요</small></span></button>
-        <a class="list-row" href="${U.telLink(p.secretaryPhone)}"><span class="ico">${Icon.svg('phone', 20)}</span><span class="t"><b>${U.esc(p.secretaryName || '비서')}에게 전화</b><small class="num">${U.esc(p.secretaryPhone || '번호를 내 정보에서 입력하세요')}</small></span></a>
-        <a class="list-row" href="${U.telLink(p.driverPhone)}"><span class="ico">${Icon.svg('car', 20)}</span><span class="t"><b>${U.esc(p.driverName || '기사님')}에게 전화</b><small class="num">${U.esc(p.driverPhone || '번호를 내 정보에서 입력하세요')}</small></span></a>
+        <button class="list-row danger" data-urgent><span class="ico">${Icon.svg('siren', 22)}</span><span class="t"><b>비서에게 긴급 요청</b><small>'지금 바로 연락 주세요'를 바로 보내요</small></span></button>
+        <a class="list-row" href="${U.telLink(p.secretaryPhone)}"><span class="ico">${Icon.svg('phone', 22)}</span><span class="t"><b>${U.esc(p.secretaryName || '비서')}에게 전화</b><small class="num">${U.esc(p.secretaryPhone || '번호를 내 정보에서 입력하세요')}</small></span></a>
+        <a class="list-row" href="${U.telLink(p.driverPhone)}"><span class="ico">${Icon.svg('car', 22)}</span><span class="t"><b>${U.esc(p.driverName || '기사님')}에게 전화</b><small class="num">${U.esc(p.driverPhone || '번호를 내 정보에서 입력하세요')}</small></span></a>
       </div>
       <p class="list-note">긴급 요청은 비서 웹 맨 위에 빨간 띠로 바로 표시돼요.</p>`;
   },
@@ -204,23 +243,53 @@ const App = {
   // ───────── 내 정보 ─────────
   me() {
     const p = this.profile();
-    const notif = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
-    const field = (name, label, val, type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${U.esc(val ?? '')}"></label>`;
-    const notifTxt = notif === 'granted' ? '켜짐 · 앱이 열려 있을 때 울려요' : notif === 'denied' ? '차단됨 · 브라우저 설정에서 허용하세요' : notif === 'unsupported' ? '이 기기에서는 지원하지 않아요' : '꺼짐';
-    return `<header class="page-head"><h1>내 정보</h1><p>${Store.mode === 'demo' ? '데모 모드' : '서버에 연결됨'}</p></header>
-      <form id="meForm">
-        <p class="section-label">나</p>
-        <div class="list form-list">${field('name', '이름', p.name)}${field('prepMin', '아침 준비 시간 (분)', p.prepMin || 60, 'number')}</div>
-        <p class="section-label">비서 · 기사님</p>
-        <div class="list form-list">${field('secretaryName', '비서 이름', p.secretaryName)}${field('secretaryPhone', '비서 연락처', p.secretaryPhone, 'tel')}${field('driverName', '기사님 이름', p.driverName)}${field('driverPhone', '기사님 연락처', p.driverPhone, 'tel')}</div>
-        <button class="btn primary form-save">저장</button>
-      </form>
-      <p class="section-label">앱</p>
-      <div class="list">
-        <${notif === 'default' ? 'button data-notif' : 'div'} class="list-row brass"><span class="ico">${Icon.svg('clock', 20)}</span><span class="t"><b>기상 · 출발 알림</b><small>${notifTxt}</small></span></${notif === 'default' ? 'button' : 'div'}>
-        ${Store.mode === 'demo' ? `<button class="list-row" data-reset><span class="ico">${Icon.svg('settings', 20)}</span><span class="t"><b>데모 데이터 처음으로</b><small>샘플 일정으로 되돌려요</small></span></button>`
-          : `<button class="list-row" data-logout><span class="ico">${Icon.svg('user', 20)}</span><span class="t"><b>로그아웃</b></span></button>`}
+    const n = this.notifState();
+    const person = (initial, name, role, phone, chat) => `<div class="person"><span class="av">${U.esc(initial)}</span>
+      <span class="who"><b>${U.esc(name)} <small>${role}</small></b><span class="num">${U.esc(phone || '연락처 없음')}</span></span>
+      ${phone ? `<a class="sq call" href="${U.telLink(phone)}" aria-label="${U.esc(name)}에게 전화">${Icon.svg('phone', 20)}</a>` : ''}
+      ${chat ? `<button class="sq" data-tabgo="chat" aria-label="${U.esc(name)}에게 비서톡">${Icon.svg('chat', 20)}</button>` : `<a class="sq" href="sms:${String(phone || '').replace(/[^0-9+]/g, '')}" aria-label="${U.esc(name)}에게 문자">${Icon.svg('sms', 20)}</a>`}</div>`;
+    const setRow = (key, label, value) => `<button class="set-row" data-edit="${key}"><span>${label}</span><span class="v">${U.esc(value)}${Icon.svg('chevron', 16)}</span></button>`;
+    const notifBox = n === 'default' || n === 'denied' ? `<section class="notif-box"><b>${Icon.svg('bell', 20)} 기상 · 출발 알림이 ${n === 'denied' ? '차단돼 있어요' : '꺼져 있어요'}</b>
+        <p>${n === 'denied' ? '브라우저 설정 → 사이트 설정 → 알림에서 이 사이트를 허용으로 바꿔 주세요.' : '켜 두면 기상 · 기사님 대기 · 출발 시간을 미리 알려 드려요.'}</p>
+        ${n === 'default' ? '<button data-notif>알림 켜기</button>' : ''}</section>` : '';
+    return `<header class="me-head"><span class="av big">${U.esc((p.name || '대').slice(0, 1))}</span>
+        <span><b>${U.esc(p.name || '대표')}님</b><small>비서실과 연결됨 · ${U.esc(p.secretaryName || '비서')} · ${U.esc(p.driverName || '기사')}</small></span></header>
+      <div class="me">
+        ${notifBox}
+        <section class="group"><h2>비서 · 기사님</h2>
+          ${person((p.secretaryName || '비').slice(0, 1), p.secretaryName || '비서', '비서', p.secretaryPhone, true)}
+          ${person((p.driverName || '기').slice(0, 1), p.driverName || '기사님', '기사', p.driverPhone, false)}
+          <button class="set-row" data-edit="contacts"><span>연락처 고치기</span><span class="v">${Icon.svg('chevron', 16)}</span></button></section>
+        <section class="group"><h2>나</h2>
+          ${setRow('name', '이름', p.name || '')}
+          ${setRow('prep', '아침 준비 시간', U.durLabel(p.prepMin || 60))}
+          ${n === 'granted' ? setRow('notif', '기상 · 출발 알림', '켜짐') : ''}</section>
+        <section class="group sizes"><h2>글자 크기</h2>
+          <div class="size-pick">${Object.entries(this.SIZES).map(([k, [l]]) => `<button class="sz-${k}" data-size="${k}" aria-pressed="${this.size() === k}">${l}</button>`).join('')}</div>
+          <p>일정표 · 버튼 · 비서톡 글자가 함께 커져요</p></section>
+        <p class="me-foot">${Store.mode === 'demo' ? '<button data-reset>데모 데이터 처음으로</button>' : '<button data-logout>로그아웃</button>'} · 버전 0.2</p>
       </div>`;
+  },
+
+  editProfile(key) {
+    const p = this.profile();
+    const f = (name, label, val, type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${U.esc(val ?? '')}"></label>`;
+    const body = {
+      name: ['이름', f('name', '이름', p.name)],
+      prep: ['아침 준비 시간', `<label>기상부터 출발까지<select name="prepMin">${this.PREP.map(m => `<option value="${m}" ${Number(p.prepMin || 60) === m ? 'selected' : ''}>${U.durLabel(m)}</option>`).join('')}</select></label>`],
+      contacts: ['연락처 고치기', f('secretaryName', '비서 이름', p.secretaryName) + f('secretaryPhone', '비서 연락처', p.secretaryPhone, 'tel') + f('driverName', '기사님 이름', p.driverName) + f('driverPhone', '기사님 연락처', p.driverPhone, 'tel')],
+    }[key];
+    if (!body) return;
+    const m = this.modal(`<h3>${body[0]}</h3><form id="pf"><div class="form-list">${body[1]}</div>
+      <div class="modal-foot"><button type="button" class="btn" data-close>취소</button><button class="btn primary">저장</button></div></form>`);
+    m.querySelector('#pf').addEventListener('submit', async e => {
+      e.preventDefault();
+      const patch = Object.fromEntries(new FormData(e.target));
+      if (patch.prepMin) patch.prepMin = Number(patch.prepMin);
+      try { await Store.saveProfile(patch); m.remove(); U.toast('저장했어요'); this.render(); }
+      catch (err) { U.toast('저장하지 못했어요: ' + (err.message || err)); }
+    });
+    m.querySelector('input,select')?.focus();
   },
 
   // ───────── 모달 ─────────
@@ -228,6 +297,7 @@ const App = {
     const back = document.createElement('div');
     back.className = 'modal-back';
     back.innerHTML = `<div class="modal" role="dialog">${html}</div>`;
+    back.style.zoom = this.SIZES[this.size()][1];
     back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-close]')) back.remove(); });
     document.body.appendChild(back);
     return back;
@@ -237,7 +307,7 @@ const App = {
     const s = Store.get(id); if (!s) return;
     const b = s.briefing || {};
     const row = (k, v) => v ? `<dt>${k}</dt><dd>${U.esc(v)}</dd>` : '';
-    this.modal(`<div class="brief-head"><span class="ico">${Icon.svg('file', 22)}</span><div><h3>${U.esc(s.title)}</h3><p>${this.shortDate(s.date)} ${s.start}${s.location ? ' · ' + U.esc(s.location) : ''}</p></div></div>
+    this.modal(`<div class="brief-head"><span class="ico">${Icon.svg('file', 22)}</span><div><h3>${U.esc(s.title)}</h3><p>${this.dateTitle(s.date)} ${s.start}${s.location ? ' · ' + U.esc(s.location) : ''}</p></div></div>
       <dl class="kv">${row(s.category === 'golf' ? '동반자' : '만날 분', b.who)}${row('회사 · 직함', b.company)}${row('목적', b.purpose)}${row('지난 미팅', b.last)}${row('메모', b.notes)}${row('준비물', b.bring)}</dl>
       <div class="modal-foot"><button class="btn primary" data-close>닫기</button></div>`);
   },
@@ -265,41 +335,51 @@ const App = {
     m.querySelector('[name=title]').focus();
   },
 
+  async askNotif() {
+    if (this.notifState() === 'denied') return this.go('me');
+    await Notification.requestPermission();
+    this.render(); this.scheduleAlerts();
+  },
+
   // ───────── 이벤트 ─────────
   bind(root) {
-    const on = (sel, fn) => root.querySelectorAll(sel).forEach(el => el.addEventListener('click', e => fn(el, e)));
+    const on = (sel, fn) => root.querySelectorAll(sel).forEach(el => el.addEventListener('click', e => { e.stopPropagation(); fn(el, e); }));
     const safe = fn => async (...a) => { try { await fn(...a); } catch (err) { U.toast('처리하지 못했어요: ' + (err.message || err)); } };
     on('[data-view]', el => { this.view = el.dataset.view; this.render(); });
-    on('[data-day]', el => { this.day = U.addDays(this.day, Number(el.dataset.day)); this.render(); });
-    on('[data-pick]', el => { this.day = el.dataset.pick; this.view = 'timeline'; this.render(); });
-    on('[data-ack]', safe(async el => { await Store.ack(el.dataset.ack); U.toast('확인했어요. 비서 화면에 표시돼요'); }));
+    on('[data-today]', () => { this.day = U.today(); this.openId = null; this.render(); });
+    on('[data-pick]', el => { this.day = el.dataset.pick; this.view = 'timeline'; this.openId = null; this.render(); });
+    on('[data-open]', el => { this.openId = el.dataset.open; this.render(); });
+    on('[data-fold]', () => { this.openId = null; this.render(); });
+    on('[data-ack]', safe(async el => { await Store.ack(el.dataset.ack); U.toast('확인했어요. 비서에게 전달됐어요'); }));
     on('[data-brief]', el => this.briefing(el.dataset.brief));
     on('[data-late]', safe(async el => { const s = Store.get(el.dataset.late); await Store.send(`'${s.title}' 10분 정도 늦을 것 같아요.`, { ref: s.id }); U.toast('비서에게 보냈어요'); }));
-    on('[data-postpone]', safe(async el => { const s = Store.get(el.dataset.postpone); await Store.send(`'${s.title}' (${this.shortDate(s.date)} ${s.start}) 일정 미뤄 주세요.`, { ref: s.id }); U.toast('비서에게 요청했어요'); }));
+    on('[data-postpone]', safe(async el => { const s = Store.get(el.dataset.postpone); await Store.send(`'${s.title}' (${this.dateTitle(s.date)} ${s.start}) 일정 미뤄 주세요.`, { ref: s.id }); U.toast('비서에게 요청했어요'); }));
+    on('[data-adjust]', safe(async el => {
+      const b = Store.get(el.dataset.adjust), a = Store.get(el.dataset.prev);
+      await Store.send(`'${a.title}' 끝나고 '${b.title}'까지 이동 시간이 부족해요. 조정해 주세요.`, { ref: b.id });
+      U.toast('비서에게 조정을 요청했어요');
+    }));
     on('[data-addprivate]', () => this.addPrivate());
     on('[data-delprivate]', safe(async el => { if (confirm('이 개인 일정을 삭제할까요?')) { await Store.remove(el.dataset.delprivate); U.toast('삭제했어요'); } }));
     on('[data-quick]', safe(async el => { await Store.send(el.dataset.quick); }));
+    on('[data-goto]', el => { const s = Store.get(el.dataset.goto); if (!s) return; this.day = s.date; this.openId = s.id; this.view = 'timeline'; this.go('home'); });
     // 긴급은 한 번 누르면 바로 전송 (입력창 없이)
     on('[data-urgent]', safe(async () => { await Store.send('지금 바로 연락 주세요', { urgent: true }); U.toast('긴급 요청을 보냈어요'); }));
-    on('[data-notif]', async () => { await Notification.requestPermission(); this.render(); this.scheduleAlerts(); });
+    on('[data-notif]', () => this.askNotif());
+    on('[data-tabgo]', el => this.go(el.dataset.tabgo));
+    on('[data-edit]', el => { if (el.dataset.edit === 'notif') return U.toast('알림을 끄려면 브라우저 설정에서 바꿔 주세요'); this.editProfile(el.dataset.edit); });
+    on('[data-size]', el => { localStorage.setItem('CEOP_FONT', el.dataset.size); this.applySize(); this.render(); });
     on('[data-reset]', () => { if (confirm('데모 데이터를 처음 상태로 되돌릴까요?')) Store.resetDemo(); });
     on('[data-logout]', () => Store.signOut());
     const cf = root.querySelector('#chatForm');
     if (cf) cf.addEventListener('submit', safe(async e => { e.preventDefault(); const v = cf.body.value.trim(); if (v) await Store.send(v); }));
-    const mf = root.querySelector('#meForm');
-    if (mf) mf.addEventListener('submit', safe(async e => {
-      e.preventDefault();
-      const f = new FormData(mf);
-      await Store.saveProfile({ name: f.get('name'), prepMin: Number(f.get('prepMin')) || 60, secretaryName: f.get('secretaryName'), secretaryPhone: f.get('secretaryPhone'), driverName: f.get('driverName'), driverPhone: f.get('driverPhone') });
-      U.toast('저장했어요');
-    }));
   },
 
   // ───────── 알림 (앱이 열려 있을 때만 — 앱이 꺼져도 울리는 알람은 안드로이드 단계에서) ─────────
   scheduleAlerts() {
     this._timers.forEach(clearTimeout);
     this._timers = [];
-    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    if (this.notifState() !== 'granted') return;
     const now = Date.now();
     [U.today(), U.addDays(U.today(), 1)].forEach(ymd => this.dayPlan(ymd).forEach(({ s, p }) => {
       p.items.filter(it => ['wake', 'driver', 'leave'].includes(it.kind)).forEach(it => {

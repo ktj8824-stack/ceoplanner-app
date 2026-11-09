@@ -81,6 +81,20 @@ const Store = {
     }
   },
 
+  /** 확인 상태는 건드리지 않고 일부 값만 바꿈 (예: 다시 알린 시각) */
+  async patch(id, fields) {
+    if (this.mode === 'supabase') {
+      const map = { nudgedAt: 'nudged_at' };
+      const row = Object.fromEntries(Object.entries(fields).map(([k, v]) => [map[k] || k, v]));
+      const { error } = await this.client.from('schedules').update(row).eq('id', id);
+      if (error) throw error;
+      await this._reload();
+    } else {
+      const s = this.data.schedules.find(x => x.id === id);
+      if (s) { Object.assign(s, fields); this._saveDemo(); }
+    }
+  },
+
   /** CEO가 일정을 확인함 */
   async ack(id) {
     const at = new Date().toISOString();
@@ -176,6 +190,7 @@ const Store = {
       mode: s.mode || 'none', travel_min: s.travelMin || 0, buffer_min: s.bufferMin ?? 10,
       visibility: s.visibility || 'normal', trip: s.trip || null, briefing: s.briefing || {},
       status: s.status || 'scheduled', ack_at: s.ackAt || null, created_role: s.createdBy || this.role,
+      origin: s.origin || null, nudged_at: s.nudgedAt || null,
     };
   },
   _fromRow(r) {
@@ -184,7 +199,7 @@ const Store = {
       start: String(r.start_time).slice(0, 5), end: String(r.end_time).slice(0, 5),
       location: r.location || '', mode: r.mode, travelMin: r.travel_min, bufferMin: r.buffer_min,
       visibility: r.visibility, trip: r.trip, briefing: r.briefing || {}, status: r.status,
-      ackAt: r.ack_at, createdBy: r.created_role, masked: !!r.masked,
+      ackAt: r.ack_at, createdBy: r.created_role, masked: !!r.masked, origin: r.origin || '', nudgedAt: r.nudged_at || null,
     };
   },
 };
