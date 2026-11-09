@@ -162,7 +162,7 @@ body.app { padding-bottom: calc(80px + env(safe-area-inset-bottom)); max-width: 
 .size-pick [aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: #fff; font-weight: 700; }
 .sizes p { margin: 0; font-size: 14px; color: var(--ink-2); }
 .me-foot { text-align: center; font-size: 13px; color: var(--slate); margin: 4px 0 0; }
-.me-foot button { color: var(--slate); text-decoration: underline; min-height: 36px; }
+.me-foot button, .me-foot a { color: var(--slate); text-decoration: underline; min-height: 36px; display: inline-flex; align-items: center; }
 .form-list select { border: 0; background: transparent; font-size: 15px; color: var(--ink-2); }
 
 /* ── 아래 메뉴 ── */
@@ -179,3 +179,31 @@ nav.tabs .dot { position: absolute; top: 10px; right: calc(50% - 16px); width: 8
 .modal .form-list { border: 1px solid var(--line); border-radius: var(--r-m); margin-top: 14px; }
 .modal-foot { display: flex; gap: 8px; margin-top: 18px; }
 .modal-foot .btn { flex: 1; padding: 12px; }
+
+/* ── AI 비서 ── */
+.ai-fab { position: fixed; right: max(16px, calc(50% - 280px + 16px)); bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 90; display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 20px 0 16px; border-radius: 26px; background: var(--navy); color: #fff; font-size: 15px; font-weight: 700; box-shadow: 0 6px 20px rgba(15, 27, 45, .28); }
+.ai-fab .ic { color: var(--brass); }
+.modal.ai-modal { padding: 0; display: flex; flex-direction: column; height: 82vh; }
+.ai { display: flex; flex-direction: column; height: 100%; }
+.ai-head { display: flex; align-items: center; gap: 12px; padding: 16px 16px 12px; border-bottom: 1px solid var(--line); }
+.ai-head .ico { width: 40px; height: 40px; border-radius: 12px; background: var(--navy); color: var(--brass); display: grid; place-items: center; }
+.ai-head div { flex: 1; }
+.ai-head h3 { margin: 0; font-size: 18px; }
+.ai-head p { margin: 2px 0 0; font-size: 12.5px; color: var(--slate); }
+.ai-log { flex: 1; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; background: var(--porcelain); }
+.ai-msg { max-width: 86%; padding: 10px 13px; border-radius: 16px; font-size: 15px; line-height: 1.45; }
+.ai-msg.me { align-self: flex-end; background: var(--navy); color: #fff; border-bottom-right-radius: 5px; }
+.ai-msg.bot { align-self: flex-start; background: var(--surface); border-bottom-left-radius: 5px; box-shadow: 0 1px 2px rgba(15, 27, 45, .06); }
+.ai-msg.card { width: 86%; border: 2px solid var(--brass); }
+.ai-msg.card ul { margin: 8px 0 10px; padding: 10px 12px; list-style: none; background: var(--porcelain); border-radius: 10px; display: grid; gap: 4px; font-size: 14px; }
+.ai-msg.card li.warn { color: var(--signal); font-weight: 700; }
+.ai-do { display: flex; gap: 8px; }
+.ai-do .btn { flex: 1; height: 44px; }
+.ai-do .ok { color: var(--ok); font-weight: 700; display: inline-flex; gap: 4px; align-items: center; }
+.ai-msg.draft p { margin: 6px 0 8px; padding: 10px; background: var(--brass-soft); border-radius: 10px; font-size: 14px; }
+.ai-ex { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; border-top: 1px solid var(--line); scrollbar-width: none; }
+.ai-ex button { white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; font-size: 13px; background: var(--surface); }
+.ai-form { display: flex; gap: 8px; padding: 8px 12px calc(12px + env(safe-area-inset-bottom)); }
+.ai-form input { flex: 1; min-width: 0; height: 46px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 15px; }
+.ai-form .btn { width: 46px; padding: 0; }
+.ai-form .mic.on { background: var(--signal); color: #fff; }

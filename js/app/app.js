@@ -81,7 +81,8 @@ const App = {
 
   // ───────── 홈 ─────────
   home() {
-    return this.hero() + `<div class="body">${this.view === 'timeline' ? this.dayList() : this.calendar()}</div>`;
+    return this.hero() + `<div class="body">${this.view === 'timeline' ? this.dayList() : this.calendar()}</div>`
+      + `<button class="ai-fab" data-ai aria-label="AI 비서 열기">${Icon.svg('mic', 20)}<span>AI 비서</span></button>`;
   },
 
   notifBanner(where) {
@@ -267,7 +268,7 @@ const App = {
         <section class="group sizes"><h2>글자 크기</h2>
           <div class="size-pick">${Object.entries(this.SIZES).map(([k, [l]]) => `<button class="sz-${k}" data-size="${k}" aria-pressed="${this.size() === k}">${l}</button>`).join('')}</div>
           <p>일정표 · 버튼 · 비서톡 글자가 함께 커져요</p></section>
-        <p class="me-foot">${Store.mode === 'demo' ? '<button data-reset>데모 데이터 처음으로</button>' : '<button data-logout>로그아웃</button>'} · 버전 0.2</p>
+        <p class="me-foot">${Store.mode === 'demo' ? '<button data-reset>데모 데이터 처음으로</button>' : '<button data-logout>로그아웃</button>'} · <a href="privacy.html" target="_blank">개인정보 처리방침</a> · 버전 0.3</p>
       </div>`;
   },
 
@@ -335,6 +336,56 @@ const App = {
     m.querySelector('[name=title]').focus();
   },
 
+  // ───────── AI 비서 (데모: 정해진 말투만 · 서버 연결 후 실제 AI로 교체) ─────────
+  openAI() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const m = this.modal(`<div class="ai">
+      <div class="ai-head"><span class="ico">${Icon.svg('mic', 20)}</span><div><h3>AI 비서</h3><p>말하거나 적으면 일정을 바꿔 드려요 · 데모라 정해진 말투만 알아들어요</p></div><button class="sq" data-close aria-label="닫기">${Icon.svg('x', 18)}</button></div>
+      <div class="ai-log" id="aiLog"><div class="ai-msg bot">무엇을 도와드릴까요? 바꾸기 전에 꼭 한 번 여쭤볼게요.</div></div>
+      <div class="ai-ex">${Assistant.EXAMPLES.map(e => `<button type="button" data-ex="${U.esc(e)}">${U.esc(e)}</button>`).join('')}</div>
+      <form id="aiForm" class="ai-form">
+        ${SR ? `<button type="button" class="sq mic" data-mic aria-label="말로 하기">${Icon.svg('mic', 20)}</button>` : ''}
+        <input name="q" placeholder="예: 점심 30분 미뤄 줘" autocomplete="off" aria-label="AI 비서에게 말하기">
+        <button class="btn primary" aria-label="보내기">${Icon.svg('send', 18)}</button>
+      </form></div>`);
+    m.querySelector('.modal').classList.add('ai-modal');
+    const log = m.querySelector('#aiLog');
+    const f = m.querySelector('#aiForm');
+    const add = (cls, html) => { log.insertAdjacentHTML('beforeend', `<div class="ai-msg ${cls}">${html}</div>`); log.scrollTop = log.scrollHeight; return log.lastElementChild; };
+    const ask = text => {
+      if (!text.trim()) return;
+      add('me', U.esc(text));
+      const r = Assistant.interpret(text, { schedules: Store.list(), now: new Date(), profile: this.profile() });
+      if (r.kind !== 'action') return add('bot', U.esc(r.say));
+      const card = add('bot card', `<b>${U.esc(r.say)}</b><ul>${r.lines.map(l => `<li class="${l.startsWith('주의') ? 'warn' : ''}">${U.esc(l)}</li>`).join('')}</ul>
+        <div class="ai-do"><button class="btn" data-no>아니요</button><button class="btn primary" data-yes>이대로 할게요</button></div>`);
+      card.querySelector('[data-no]').addEventListener('click', () => { card.querySelector('.ai-do').innerHTML = '<span class="muted small">취소했어요</span>'; });
+      card.querySelector('[data-yes]').addEventListener('click', async () => {
+        try {
+          for (const c of r.changes) await Store.upsert(c.schedule);
+          if (r.notify) await Store.send(r.notify.body, { ref: r.notify.ref });
+          card.querySelector('.ai-do').innerHTML = `<span class="ok">${Icon.svg('check', 15)} ${r.changes.length ? '바꿨어요. ' : ''}비서에게 알렸어요</span>`;
+          if (r.draft) {
+            const d = add('bot draft', `<b>상대방에게 보낼 문자 초안</b><p>${U.esc(r.draft)}</p><button class="btn" data-copy>복사</button>`);
+            d.querySelector('[data-copy]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(r.draft); U.toast('복사했어요'); } catch { U.toast('복사하지 못했어요. 길게 눌러 복사해 주세요'); } });
+          }
+        } catch (err) { U.toast('바꾸지 못했어요: ' + (err.message || err)); }
+      });
+    };
+    f.addEventListener('submit', e => { e.preventDefault(); const v = f.q.value; f.q.value = ''; ask(v); });
+    m.querySelectorAll('[data-ex]').forEach(b => b.addEventListener('click', () => ask(b.dataset.ex)));
+    const mic = m.querySelector('[data-mic]');
+    if (mic) mic.addEventListener('click', () => {
+      const rec = new SR(); rec.lang = 'ko-KR'; rec.interimResults = false;
+      mic.classList.add('on'); f.q.placeholder = '듣고 있어요…';
+      rec.onresult = e => { const said = e.results[0][0].transcript; ask(said); };
+      rec.onerror = () => U.toast('잘 못 들었어요. 다시 말씀하거나 적어 주세요');
+      rec.onend = () => { mic.classList.remove('on'); f.q.placeholder = '예: 점심 30분 미뤄 줘'; };
+      rec.start();
+    });
+    f.q.focus();
+  },
+
   async askNotif() {
     if (this.notifState() === 'denied') return this.go('me');
     await Notification.requestPermission();
@@ -360,6 +411,7 @@ const App = {
       U.toast('비서에게 조정을 요청했어요');
     }));
     on('[data-addprivate]', () => this.addPrivate());
+    on('[data-ai]', () => this.openAI());
     on('[data-delprivate]', safe(async el => { if (confirm('이 개인 일정을 삭제할까요?')) { await Store.remove(el.dataset.delprivate); U.toast('삭제했어요'); } }));
     on('[data-quick]', safe(async el => { await Store.send(el.dataset.quick); }));
     on('[data-goto]', el => { const s = Store.get(el.dataset.goto); if (!s) return; this.day = s.date; this.openId = s.id; this.view = 'timeline'; this.go('home'); });

@@ -8,6 +8,7 @@ const Login = {
         <input type="password" name="pw" placeholder="비밀번호" required autocomplete="current-password">
         <button class="btn primary" type="submit">로그인</button>
         <p class="muted small" id="loginErr" style="margin:0"></p>
+        <a class="muted small" href="privacy.html" target="_blank">개인정보 처리방침</a>
       </form>`;
     root.querySelector('#loginForm').addEventListener('submit', async e => {
       e.preventDefault();
