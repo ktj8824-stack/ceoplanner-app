@@ -22,13 +22,17 @@ const App = {
     this.applySize();
     try { await Store.init('ceo'); }
     catch (e) { root.innerHTML = `<p style="padding:20px">연결 오류: ${U.esc(e.message || e)}</p>`; return; }
-    if (Store.needsLogin) return Login.render(root, 'CEO플래너 로그인', () => this.boot());
+    if (Store.needsLogin) {
+      document.getElementById('tabs').hidden = true;   // 로그인 · 가입 중에는 아래 메뉴 숨김
+      return Login.render(root, 'CEO플래너 로그인', () => this.boot());
+    }
     this.boot();
   },
 
   boot() {
     this.seenMsgs = Number(localStorage.getItem('CEOP_SEEN_CEO') || 0);
     const nav = document.getElementById('tabs');
+    nav.hidden = false;
     nav.innerHTML = this.TABS.map(([k, ic, l]) => `<button data-tab="${k}" class="${k === 'sos' ? 'sos-tab' : ''}">${Icon.svg(ic, 24)}<span>${l}</span></button>`).join('');
     nav.addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) this.go(b.dataset.tab); });
     Store.on(() => { this.render(); this.scheduleAlerts(); });

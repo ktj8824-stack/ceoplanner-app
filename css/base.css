@@ -81,3 +81,26 @@ a { color: inherit; }
 .demo-bar a { font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* 로그인 · 회사 등록 */
+.login-err { margin: 0; color: var(--signal); min-height: 0; }
+.login-err:empty { display: none; }
+.login.signup { max-width: 480px; margin: 5vh auto; }
+.login fieldset { border: 1px solid var(--line); border-radius: var(--r-m); padding: 12px 14px 14px; margin: 0; display: grid; gap: 10px; }
+.login fieldset[hidden] { display: none; }
+.login legend { font-weight: 700; font-size: 14px; padding: 0 6px; }
+.login label { display: grid; gap: 5px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.login label[hidden] { display: none; }
+.login .hint { font-size: 12.5px; color: var(--slate); margin-top: -4px; }
+.login .hint.bad { color: var(--signal); }
+.login .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.login .seg label { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: var(--r-m); font-size: 14px; cursor: pointer; }
+.login .seg label:has(input:checked) { border-color: var(--navy); background: var(--navy); color: #fff; }
+.login .seg input { accent-color: var(--brass); }
+.login .agree { display: flex; align-items: flex-start; gap: 8px; font-weight: 500; font-size: 14px; }
+.login .agree input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--navy); }
+.login .acc { grid-template-columns: 90px 1fr; margin: 4px 0; }
+.login input { width: 100%; box-sizing: border-box; min-width: 0; }
+.login input[type=radio], .login input[type=checkbox] { width: auto; flex: none; }
+.login .seg label { white-space: nowrap; }
+.login .agree input { width: 18px; height: 18px; }

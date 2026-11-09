@@ -13,6 +13,7 @@ const Store = {
   client: null,
   user: null,
   ceoId: null,
+  companyId: null,
   needsLogin: false,
   loginError: null,
   _subs: [],
@@ -34,7 +35,7 @@ const Store = {
     }
   },
 
-  _empty() { return { profile: {}, schedules: [], messages: [] }; },
+  _empty() { return { profile: {}, schedules: [], messages: [], members: [] }; },
 
   // ───────── 구독 (데이터가 바뀌면 화면 다시 그리기) ─────────
   on(fn) { this._subs.push(fn); },
@@ -53,6 +54,12 @@ const Store = {
   byDate(ymd) { return this.list().filter(s => s.date === ymd).sort((a, b) => a.start.localeCompare(b.start)); },
   get(id) { const s = this.data.schedules.find(x => x.id === id); return s ? this._view(s) : null; },
   messages() { return [...this.data.messages].sort((a, b) => a.at.localeCompare(b.at)); },
+  /** 우리 회사 계정 목록 (대표 · 비서 화면의 '계정 관리') */
+  members() {
+    const order = { ceo: 0, secretary: 1, driver: 2 };
+    const list = this.data.members || Demo.members(this.data.profile);
+    return [...list].sort((a, b) => order[a.role] - order[b.role] || a.name.localeCompare(b.name));
+  },
 
   // ───────── 쓰기 ─────────
   async upsert(s) {
@@ -132,6 +139,48 @@ const Store = {
     } else this._saveDemo();
   },
 
+  // ───────── 회사 등록 (가입) · 계정 관리 ─────────
+  /** 서버 함수 ceo-account 호출. 실패하면 쉬운 말 오류를 던짐 */
+  async _account(body) {
+    const { data, error } = await this.client.functions.invoke('ceo-account', { body });
+    if (error) {
+      let msg = '';
+      try { msg = (await error.context.json()).error; } catch { /* 응답이 JSON 아님 */ }
+      throw new Error(msg || '서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    }
+    if (data && data.error) throw new Error(data.error);
+    return data;
+  },
+  async signUp(form) { return this._account({ action: 'signup', ...form }); },
+
+  /** action: 'add_member' | 'reset_password' | 'remove_member' */
+  async account(action, payload) {
+    if (this.mode === 'supabase') {
+      const r = await this._account({ action, ...payload });
+      await this._reload(); this._emit();
+      return r;
+    }
+    // 데모: 이 브라우저 안에서만 흉내 (비밀번호는 저장하지 않음)
+    const list = this.data.members = this.members();
+    const id = String(payload.loginId || '').trim().toLowerCase();
+    const t = list.find(m => m.loginId === id);
+    if (action === 'add_member') {
+      if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(id)) throw new Error(`아이디 '${id}'는 쓸 수 없어요. 영어 소문자·숫자로 3~30자 (기호는 . _ - 만)`);
+      if (t) throw new Error(`아이디 '${id}'는 이미 있어요. 다른 아이디로 정해 주세요.`);
+      if (String(payload.password || '').length < 8) throw new Error('비밀번호는 8자 이상으로 정해 주세요.');
+      if (!String(payload.name || '').trim()) throw new Error('이름을 넣어 주세요.');
+      list.push({ loginId: id, name: payload.name.trim(), role: payload.role, phone: payload.phone || '' });
+    } else if (!t) throw new Error('우리 회사 계정에서 찾지 못했어요.');
+    else if (action === 'reset_password') { if (String(payload.password || '').length < 8) throw new Error('비밀번호는 8자 이상으로 정해 주세요.'); }
+    else if (action === 'remove_member') {
+      if (t.role === 'ceo') throw new Error('대표 계정은 지울 수 없어요. 해지는 고객센터로 문의해 주세요.');
+      if (t.role === this.role && t.role === 'secretary' && list.filter(m => m.role === 'secretary').length === 1) throw new Error('내 계정은 여기서 지울 수 없어요.');
+      this.data.members = list.filter(m => m !== t);
+    }
+    this._saveDemo();
+    return { ok: true };
+  },
+
   resetDemo() { localStorage.removeItem(this.KEY); this._loadDemo(); this._emit(); },
 
   // ───────── 데모 모드 ─────────
@@ -163,13 +212,14 @@ const Store = {
   async _afterLogin(user) {
     this.user = user;
     // CEO플래너에 등록된 계정인지, 이 화면에 맞는 역할인지 확인 (같은 서버의 다른 앱 계정은 막힘)
-    const me = await this.client.from('ceo_profiles').select('role').eq('id', user.id).maybeSingle();
+    const me = await this.client.from('ceo_profiles').select('role, company_id, login_id').eq('id', user.id).maybeSingle();
     if (me.error) throw me.error;
     if (!me.data) throw new Error('CEO플래너 계정이 아니에요. 회사에서 받은 아이디로 로그인해 주세요.');
     if (me.data.role !== this.role) {
       const where = { ceo: '대표 앱', secretary: '비서 웹', driver: '기사 화면(준비 중)' }[me.data.role];
       throw new Error(`이 아이디는 ${where}용이에요.`);
     }
+    this.companyId = me.data.company_id; this.myLogin = me.data.login_id;
     if (this.role === 'ceo') this.ceoId = user.id;
     else {
       const { data, error } = await this.client.from('ceo_links').select('ceo_id').eq('member_id', user.id).eq('role', this.role).limit(1);
@@ -187,16 +237,18 @@ const Store = {
   async _reload() {
     if (!this.ceoId) { this.data = this._empty(); return; }
     // schedule_feed 뷰: 비서에게는 개인 일정을 서버에서 '바쁨'으로 가려서 내려줌
-    const [sch, msg, prof] = await Promise.all([
+    const [sch, msg, prof, mem] = await Promise.all([
       this.client.from('ceo_schedule_feed').select('*').eq('ceo_id', this.ceoId),
       this.client.from('ceo_messages').select('*').eq('ceo_id', this.ceoId).order('created_at', { ascending: true }).limit(300),
       this.client.from('ceo_profiles').select('name, settings').eq('id', this.ceoId).single(),
+      this.companyId ? this.client.from('ceo_profiles').select('login_id, name, role, phone').eq('company_id', this.companyId) : Promise.resolve({ data: [] }),
     ]);
     if (sch.error) throw sch.error;
     if (msg.error) throw msg.error;
     this.data = {
       profile: { name: prof.data?.name, ...(prof.data?.settings || {}) },
       schedules: (sch.data || []).map(r => this._fromRow(r)),
+      members: (mem.data || []).map(r => ({ loginId: r.login_id, name: r.name, role: r.role, phone: r.phone || '' })),
       messages: (msg.data || []).map(r => ({ id: r.id, from: r.sender_role, body: r.body, urgent: r.urgent, ref: r.ref_id, at: r.created_at })),
     };
   },

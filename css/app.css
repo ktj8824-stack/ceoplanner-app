@@ -207,3 +207,4 @@ nav.tabs .dot { position: absolute; top: 10px; right: calc(50% - 16px); width: 8
 .ai-form input { flex: 1; min-width: 0; height: 46px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 15px; }
 .ai-form .btn { width: 46px; padding: 0; }
 .ai-form .mic.on { background: var(--signal); color: #fff; }
+nav.tabs[hidden] { display: none; }

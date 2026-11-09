@@ -3,6 +3,14 @@
    날짜는 항상 '오늘' 기준으로 만듭니다.
    ========================================= */
 const Demo = {
+  /** 데모 회사 계정 (계정 관리 화면용) */
+  members(p = {}) {
+    return [
+      { loginId: 'kim', name: p.name || '김대표', role: 'ceo', phone: p.ceoPhone || '' },
+      { loginId: 'lee', name: p.secretaryName || '이비서', role: 'secretary', phone: p.secretaryPhone || '' },
+      { loginId: 'park', name: p.driverName || '박기사', role: 'driver', phone: p.driverPhone || '' },
+    ];
+  },
   build() {
     const t = U.today(), d1 = U.addDays(t, 1), d2 = U.addDays(t, 2);
     const S = (o) => ({ id: U.uid(), visibility: 'normal', bufferMin: 10, status: 'scheduled', ackAt: null, briefing: {}, createdBy: 'secretary', ...o });
