@@ -3,6 +3,10 @@
    날짜는 항상 '오늘' 기준으로 만듭니다.
    ========================================= */
 const Demo = {
+  /** 데모 회사 구독: 무료 체험 10일 남음 */
+  company() {
+    return { plan: 'trial', trialUntil: new Date(Date.now() + 10 * 86400000).toISOString(), paidUntil: null, extraExecs: 0 };
+  },
   /** 데모 회사 계정 (계정 관리 화면용) */
   members(p = {}) {
     return [

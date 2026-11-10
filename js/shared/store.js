@@ -35,7 +35,7 @@ const Store = {
     }
   },
 
-  _empty() { return { profile: {}, schedules: [], messages: [], members: [] }; },
+  _empty() { return { profile: {}, schedules: [], messages: [], members: [], company: null, payments: [] }; },
 
   // ───────── 구독 (데이터가 바뀌면 화면 다시 그리기) ─────────
   on(fn) { this._subs.push(fn); },
@@ -54,6 +54,39 @@ const Store = {
   byDate(ymd) { return this.list().filter(s => s.date === ymd).sort((a, b) => a.start.localeCompare(b.start)); },
   get(id) { const s = this.data.schedules.find(x => x.id === id); return s ? this._view(s) : null; },
   messages() { return [...this.data.messages].sort((a, b) => a.at.localeCompare(b.at)); },
+  /** 회사 구독 정보 { plan, trialUntil, paidUntil, extraExecs } · 결제 내역 */
+  company() {
+    if (!this.data.company && this.mode === 'demo') { this.data.company = Demo.company(); }
+    return this.data.company;
+  },
+  payments() { return this.data.payments || []; },
+  /** 데모 전용: 회사 구독 정보 바꾸기 */
+  demoSetCompany(patch) { this.data.company = { ...this.company(), ...patch }; this._saveDemo(); },
+
+  /** 결제: action 'pay_prepare' | 'pay_confirm'. 데모에서는 서버 없이 바로 반영 */
+  async billing(action, payload = {}) {
+    if (this.mode === 'supabase') {
+      const r = await this._account({ action, ...payload });
+      if (action === 'pay_confirm') { await this._reload(); this._emit(); }
+      return r;
+    }
+    const P = Plan.PRICES, execs = Number(payload.extraExecs || 0);
+    if (action === 'pay_prepare') {
+      if (!['basic', 'premium'].includes(payload.plan)) throw new Error('요금제를 다시 골라 주세요.');
+      return { orderId: 'DEMO-' + Date.now(), amount: P[payload.plan] + P.perExec * execs, orderName: `CEO플래너 ${Plan.NAMES[payload.plan]}${execs ? ` + 임원 ${execs}명` : ''} (1개월)`, mode: 'demo' };
+    }
+    if (action === 'pay_confirm') {
+      const c = this.company(), now = new Date();
+      const start = c.paidUntil && new Date(c.paidUntil) > now ? new Date(c.paidUntil) : now;
+      const end = new Date(start); end.setMonth(end.getMonth() + 1);
+      this.data.company = { ...c, plan: payload.plan, extraExecs: execs, paidUntil: end.toISOString() };
+      this.data.payments = [{ orderId: payload.orderId, plan: payload.plan, extraExecs: execs, amount: payload.amount, status: 'DONE', method: '데모 결제', approvedAt: now.toISOString(), periodEnd: end.toISOString(), mode: 'demo' }, ...this.payments()].slice(0, 12);
+      this._saveDemo();
+      return { status: 'DONE', orderId: payload.orderId, plan: payload.plan, amount: payload.amount, method: '데모 결제', periodEnd: end.toISOString(), mode: 'demo' };
+    }
+    throw new Error('알 수 없는 결제 요청이에요.');
+  },
+
   /** 우리 회사 계정 목록 (대표 · 비서 화면의 '계정 관리') */
   members() {
     const order = { ceo: 0, secretary: 1, driver: 2 };
@@ -237,17 +270,21 @@ const Store = {
   async _reload() {
     if (!this.ceoId) { this.data = this._empty(); return; }
     // schedule_feed 뷰: 비서에게는 개인 일정을 서버에서 '바쁨'으로 가려서 내려줌
-    const [sch, msg, prof, mem] = await Promise.all([
+    const [sch, msg, prof, mem, co, pay] = await Promise.all([
       this.client.from('ceo_schedule_feed').select('*').eq('ceo_id', this.ceoId),
       this.client.from('ceo_messages').select('*').eq('ceo_id', this.ceoId).order('created_at', { ascending: true }).limit(300),
       this.client.from('ceo_profiles').select('name, settings').eq('id', this.ceoId).single(),
       this.companyId ? this.client.from('ceo_profiles').select('login_id, name, role, phone').eq('company_id', this.companyId) : Promise.resolve({ data: [] }),
+      this.companyId ? this.client.from('ceo_companies').select('plan, trial_until, paid_until, extra_execs').eq('id', this.companyId).maybeSingle() : Promise.resolve({ data: null }),
+      this.companyId ? this.client.from('ceo_payments').select('order_id, plan, extra_execs, amount, status, method, approved_at, period_end, mode, created_at').eq('company_id', this.companyId).neq('status', 'READY').order('created_at', { ascending: false }).limit(12) : Promise.resolve({ data: [] }),
     ]);
     if (sch.error) throw sch.error;
     if (msg.error) throw msg.error;
     this.data = {
       profile: { name: prof.data?.name, ...(prof.data?.settings || {}) },
       schedules: (sch.data || []).map(r => this._fromRow(r)),
+      company: co && co.data ? { plan: co.data.plan, trialUntil: co.data.trial_until, paidUntil: co.data.paid_until, extraExecs: co.data.extra_execs || 0 } : null,
+      payments: ((pay && pay.data) || []).map(r => ({ orderId: r.order_id, plan: r.plan, extraExecs: r.extra_execs, amount: r.amount, status: r.status, method: r.method, approvedAt: r.approved_at, periodEnd: r.period_end, mode: r.mode })),
       members: (mem.data || []).map(r => ({ loginId: r.login_id, name: r.name, role: r.role, phone: r.phone || '' })),
       messages: (msg.data || []).map(r => ({ id: r.id, from: r.sender_role, body: r.body, urgent: r.urgent, ref: r.ref_id, at: r.created_at })),
     };

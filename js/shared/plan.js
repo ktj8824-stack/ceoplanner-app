@@ -1,0 +1,67 @@
+/* CEO플래너 — 구독 요금제 (화면용). 로드플래너 plan.js 와 같은 역할.
+   - 가격 · 상태 규칙은 서버(supabase/functions/ceo-account/billing.js)와 같아요. 실제 금액은 서버가 정해요.
+   - 무료 체험(가입 후 14일, AI 포함) → 기본(AI 없음) / AI 비서 포함 중 골라 월 결제
+   - 결제 1번 = 1개월. 끝나기 전에 또 결제하면 끝나는 날 뒤로 1개월 이어 붙어요.
+   - 막는 곳: AI 비서(기본 요금제 · 기간 끝) · 기간이 끝나면 앱 · 웹 전체에 결제 안내 (데이터는 그대로 보관) */
+const Plan = {
+  PRICES: { basic: 59000, premium: 100000, perExec: 50000, maxExec: 20, trialDays: 14 },
+  NAMES: { trial: '무료 체험', basic: '기본', premium: 'AI 비서 포함', expired: '이용 기간 끝남' },
+  FEATURES: {
+    basic: ['비서 웹 · 대표 앱 · 기사 계정', '역산 알림 (기상 · 기사 호출 · 출발)', '일정 겹침 · 동선 확인, 비서톡'],
+    premium: ['기본의 모든 기능', 'AI 비서 — 말로 일정 등록 · 변경 · 미루기', '아침 브리핑 자동 정리'],
+  },
+
+  /** 지금 상태 { plan, active, ai, until, daysLeft } — 서버 planState 와 같은 규칙 */
+  state(now = new Date()) {
+    const c = Store.company() || {};
+    const paid = c.paidUntil && new Date(c.paidUntil) > now;
+    const trial = !paid && c.trialUntil && new Date(c.trialUntil) > now;
+    const plan = paid ? c.plan : trial ? 'trial' : 'expired';
+    const until = paid ? c.paidUntil : trial ? c.trialUntil : null;
+    const daysLeft = until ? Math.max(0, Math.ceil((new Date(until) - now) / 86400000)) : 0;
+    return { plan, active: !!(paid || trial), ai: plan === 'premium' || plan === 'trial', until, daysLeft, extraExecs: c.extraExecs || 0 };
+  },
+  can(feature) { const s = this.state(); return feature === 'ai' ? s.ai : s.active; },
+
+  won(n) { return Number(n).toLocaleString('ko-KR') + '원'; },
+  price(plan, execs = 0) { return this.PRICES[plan] + this.PRICES.perExec * execs; },
+  untilText(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+  },
+  /** 한 줄 요약 — 예: 'AI 비서 포함 · 12.10까지' / '무료 체험 · 3일 남음' */
+  summary() {
+    const s = this.state();
+    if (s.plan === 'expired') return '이용 기간이 끝났어요';
+    if (s.plan === 'trial') return `무료 체험 · ${s.daysLeft}일 남음`;
+    return `${this.NAMES[s.plan]} · ${this.untilText(s.until)}까지`;
+  },
+
+  /** 결제 화면 주소. 아이폰 앱(파일로 열림)에서는 사파리로 웹 결제 화면을 열어요 */
+  payUrl() {
+    const from = Store.role === 'secretary' ? 'web' : 'app';
+    if (location.protocol === 'file:') return CEOP_CONFIG.PAY_URL + '?from=app';
+    return `payment.html?from=${from}`;
+  },
+
+  /** 기간이 끝났을 때 화면 전체를 덮는 안내 (데이터는 그대로) */
+  lockHtml() {
+    const can = ['ceo', 'secretary'].includes(Store.role);
+    return `<div class="plan-lock card" role="alertdialog" aria-labelledby="lockT">
+      <h2 id="lockT">이용 기간이 끝났어요</h2>
+      <p>일정 · 비서톡 기록은 그대로 보관돼 있어요. 결제하면 바로 다시 쓸 수 있어요.</p>
+      <ul class="plan-mini">
+        <li><b>기본</b> 월 ${this.won(this.PRICES.basic)}</li>
+        <li><b>AI 비서 포함</b> 월 ${this.won(this.PRICES.premium)}</li>
+      </ul>
+      ${can ? `<a class="btn primary" href="${U.esc(this.payUrl())}">결제하고 계속 쓰기</a>` : '<p class="muted small">회사 대표님이나 비서님께 결제를 요청해 주세요.</p>'}
+      ${Store.mode === 'supabase' ? '<button class="btn quiet" data-logout>로그아웃</button>' : '<button class="btn quiet" data-plan-reset>데모: 체험 기간 다시 시작</button>'}
+    </div>`;
+  },
+  bindLock(root) {
+    root.querySelector('[data-logout]')?.addEventListener('click', () => Store.signOut());
+    root.querySelector('[data-plan-reset]')?.addEventListener('click', () => Store.demoSetCompany({ plan: 'trial', trialUntil: new Date(Date.now() + this.PRICES.trialDays * 86400000).toISOString(), paidUntil: null }));
+  },
+};
+if (typeof window !== 'undefined') window.Plan = Plan;

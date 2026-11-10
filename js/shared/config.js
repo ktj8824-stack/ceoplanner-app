@@ -14,6 +14,9 @@
   window.CEOP_CONFIG = Object.freeze({
     SUPABASE_URL: '',
     SUPABASE_KEY: '', // sb_publishable_... 키만
+    // 토스페이먼츠 결제위젯 클라이언트 키 — 지금은 토스 문서용 공개 테스트 키 (실제 돈 안 나감). 가맹 후 live_gck_... 로 교체
+    TOSS_CLIENT_KEY: 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm',
+    PAY_URL: APP + 'payment.html',   // 아이폰 앱에서는 사파리로 이 결제 화면을 열어요
     LOGIN_DOMAIN: 'ceoplanner.invalid', // 발급 아이디 kim → kim@ceoplanner.invalid (스스로 가입 · 카카오/구글 없음)
     APP_URL: isDev ? './index.html' : APP,
     SECRETARY_URL: isDev ? './secretary.html' : WEB,

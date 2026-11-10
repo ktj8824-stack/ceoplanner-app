@@ -104,3 +104,11 @@ a { color: inherit; }
 .login input[type=radio], .login input[type=checkbox] { width: auto; flex: none; }
 .login .seg label { white-space: nowrap; }
 .login .agree input { width: 18px; height: 18px; }
+
+/* 구독 */
+.plan-lock { max-width: 440px; margin: 10vh auto; padding: 28px 24px; display: grid; gap: 12px; text-align: center; }
+.plan-lock h2 { margin: 0; font-size: 22px; }
+.plan-lock p { margin: 0; color: var(--ink-2); line-height: 1.6; }
+.plan-mini { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 6px; }
+.plan-mini li { display: flex; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 15px; }
+.plan-lock-wrap { padding: 0 16px; }

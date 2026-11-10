@@ -57,6 +57,9 @@ const App = {
     document.querySelectorAll('#tabs button').forEach(b => { b.classList.toggle('on', b.dataset.tab === this.tab); b.setAttribute('aria-current', b.dataset.tab === this.tab ? 'page' : 'false'); });
     const demo = Store.mode === 'demo' ? `<div class="demo-bar">데모 모드입니다. 같은 브라우저에서 <a href="${U.esc(CEOP_CONFIG.SECRETARY_URL)}" target="_blank">비서 웹</a>을 열면 양쪽에 바로 반영돼요.</div>` : '';
     const root = document.getElementById('root');
+    const ps = Plan.state();
+    document.getElementById('tabs').hidden = !ps.active;
+    if (!ps.active) { root.innerHTML = demo + `<div class="plan-lock-wrap">${Plan.lockHtml()}</div>`; Plan.bindLock(root); return; }
     root.innerHTML = demo + { home: () => this.home(), chat: () => this.chat(), sos: () => this.sos(), me: () => this.me() }[this.tab]();
     this.bind(root);
     this.updateChatDot();
@@ -269,6 +272,8 @@ const App = {
           ${setRow('name', '이름', p.name || '')}
           ${setRow('prep', '아침 준비 시간', U.durLabel(p.prepMin || 60))}
           ${n === 'granted' ? setRow('notif', '기상 · 출발 알림', '켜짐') : ''}</section>
+        <section class="group"><h2>구독</h2>
+          <a class="set-row" href="${U.esc(Plan.payUrl())}"><span>${U.esc(Plan.NAMES[Plan.state().plan])}</span><span class="v">${U.esc(Plan.summary().split(' · ').slice(1).join(' · ') || '결제하기')}${Icon.svg('chevron', 16)}</span></a></section>
         <section class="group sizes"><h2>글자 크기</h2>
           <div class="size-pick">${Object.entries(this.SIZES).map(([k, [l]]) => `<button class="sz-${k}" data-size="${k}" aria-pressed="${this.size() === k}">${l}</button>`).join('')}</div>
           <p>일정표 · 버튼 · 비서톡 글자가 함께 커져요</p></section>
@@ -342,6 +347,12 @@ const App = {
 
   // ───────── AI 비서 (데모: 정해진 말투만 · 서버 연결 후 실제 AI로 교체) ─────────
   openAI() {
+    if (!Plan.can('ai')) {
+      const m = this.modal(`<div class="ai"><div class="ai-head"><span class="ico">${Icon.svg('mic', 20)}</span><div><h3>AI 비서</h3><p>지금 요금제: ${U.esc(Plan.NAMES[Plan.state().plan])}</p></div><button class="sq" data-close aria-label="닫기">${Icon.svg('x', 18)}</button></div>
+        <p style="margin:4px 0 12px;font-size:1.05em">AI 비서는 <b>'AI 비서 포함'</b> 요금제(월 ${Plan.won(Plan.PRICES.premium)})에서 쓸 수 있어요. 말로 일정을 넣고 바꾸고 미룰 수 있어요.</p>
+        <a class="btn primary" style="width:100%" href="${U.esc(Plan.payUrl())}">요금제 바꾸기</a></div>`);
+      return m;
+    }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const m = this.modal(`<div class="ai">
       <div class="ai-head"><span class="ico">${Icon.svg('mic', 20)}</span><div><h3>AI 비서</h3><p>말하거나 적으면 일정을 바꿔 드려요 · 데모라 정해진 말투만 알아들어요</p></div><button class="sq" data-close aria-label="닫기">${Icon.svg('x', 18)}</button></div>
