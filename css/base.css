@@ -114,7 +114,7 @@ a { color: inherit; }
 .plan-lock-wrap { padding: 0 16px; }
 
 /* ── 시작 · 로그인 · 회사 등록 (로드플래너 · 마이플래너와 같은 구성) ── */
-.auth { max-width: 440px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; box-sizing: border-box; display: flex; flex-direction: column; padding: calc(56px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); }
+.auth { max-width: 440px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; box-sizing: border-box; display: flex; flex-direction: column; padding: calc(56px + var(--sat, env(safe-area-inset-top))) 20px calc(24px + var(--sab, env(safe-area-inset-bottom))); }
 .auth-start { color: #fff; position: relative; isolation: isolate; }
 .auth-start::before { content: ''; position: fixed; inset: 0 0 auto 0; height: 46vh; background: var(--navy); z-index: -1; }
 .auth-brand { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
@@ -151,7 +151,7 @@ a { color: inherit; }
 .auth-switch { margin: auto 0 0; padding-top: 24px; text-align: center; font-size: 14px; color: var(--slate); }
 .auth-switch button { color: var(--brass-ink); font-weight: 700; font-size: 14px; }
 /* 회사 등록 · 가입 완료도 같은 화면 틀 (기존 .login 카드 모양은 끔) */
-.auth.login { max-width: 480px; margin: 0 auto; background: transparent; box-shadow: none; border-radius: 0; gap: 14px; padding-top: calc(56px + env(safe-area-inset-top)); }
+.auth.login { max-width: 480px; margin: 0 auto; background: transparent; box-shadow: none; border-radius: 0; gap: 14px; padding-top: calc(56px + var(--sat, env(safe-area-inset-top))); }
 .auth.login fieldset { background: var(--surface); border: 0; border-radius: 16px; padding: 14px 16px 16px; }
 .auth.login legend { float: left; width: 100%; padding: 0 0 4px; font-size: 15px; }
 .auth.login .auth-primary { margin-top: 4px; }

@@ -2,10 +2,10 @@
    CEO 앱 (모바일)
    한 가지만 크게: 다음 출발 시각. 나머지는 조용하게.
    ========================================= */
-body.app { padding-bottom: calc(80px + env(safe-area-inset-bottom)); max-width: 560px; margin: 0 auto; background: var(--porcelain); }
+body.app { padding-bottom: calc(80px + var(--sab, env(safe-area-inset-bottom))); max-width: 560px; margin: 0 auto; background: var(--porcelain); }
 
 /* ── 상단 (네이비) ── */
-.hero { background: var(--navy); color: #fff; padding: 18px 20px 22px; padding-top: calc(18px + env(safe-area-inset-top)); display: grid; gap: 14px; }
+.hero { background: var(--navy); color: #fff; padding: 18px 20px 22px; padding-top: calc(18px + var(--sat, env(safe-area-inset-top))); display: grid; gap: 14px; }
 .hero-top { display: flex; justify-content: space-between; font-size: 15px; color: #AAB3C0; }
 .notif-banner { display: flex; align-items: center; gap: 8px; width: 100%; padding: 11px 14px; border-radius: 12px; background: var(--signal); color: #fff; font-size: 15px; font-weight: 700; text-align: left; }
 .notif-banner span { flex: 1; }
@@ -93,7 +93,7 @@ body.app { padding-bottom: calc(80px + env(safe-area-inset-bottom)); max-width: 
 .cal-week { font-size: 12px; color: var(--slate); padding: 14px 0 6px 72px; }
 
 /* ── 화면 제목 (비서톡 · 긴급 · 내 정보) ── */
-.page-head { background: var(--navy); color: #fff; padding: 22px; padding-top: calc(22px + env(safe-area-inset-top)); }
+.page-head { background: var(--navy); color: #fff; padding: 22px; padding-top: calc(22px + var(--sat, env(safe-area-inset-top))); }
 .page-head h1 { margin: 0; font-size: 22px; letter-spacing: -0.03em; }
 .page-head p { margin: 2px 0 0; font-size: 13px; color: #9AA6B8; }
 
@@ -105,7 +105,7 @@ body.app { padding-bottom: calc(80px + env(safe-area-inset-bottom)); max-width: 
 .msg.urgent { background: var(--signal); color: #fff; }
 .msg .ref { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 13px; font-weight: 700; background: var(--line-2); color: var(--navy-3); border-radius: 8px; padding: 6px 10px; }
 .msg small { display: block; font-size: 11px; opacity: .6; margin-top: 3px; font-variant-numeric: tabular-nums; }
-.composer { position: fixed; left: 0; right: 0; bottom: calc(72px + env(safe-area-inset-bottom)); max-width: 560px; margin: 0 auto; background: rgba(238, 240, 243, .96); backdrop-filter: blur(8px); padding: 8px 12px 10px; border-top: 1px solid var(--line); }
+.composer { position: fixed; left: 0; right: 0; bottom: calc(72px + var(--sab, env(safe-area-inset-bottom))); max-width: 560px; margin: 0 auto; background: rgba(238, 240, 243, .96); backdrop-filter: blur(8px); padding: 8px 12px 10px; border-top: 1px solid var(--line); }
 .quick { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
 .quick button { white-space: nowrap; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 13px; }
 .composer form { display: flex; gap: 8px; }
@@ -132,7 +132,7 @@ body.app { padding-bottom: calc(80px + env(safe-area-inset-bottom)); max-width: 
 .section-label { margin: 22px 20px -6px; font-size: 13px; font-weight: 600; color: var(--slate); }
 
 /* ── 내 정보 ── */
-.me-head { background: var(--navy); color: #fff; padding: 22px 20px 20px; padding-top: calc(22px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 14px; }
+.me-head { background: var(--navy); color: #fff; padding: 22px 20px 20px; padding-top: calc(22px + var(--sat, env(safe-area-inset-top))); display: flex; align-items: center; gap: 14px; }
 .me-head b { display: block; font-size: 22px; font-weight: 800; }
 .me-head small { font-size: 14px; color: #AAB3C0; }
 .av { width: 44px; height: 44px; border-radius: 50%; background: var(--porcelain); display: grid; place-items: center; font-weight: 800; flex-shrink: 0; }
@@ -166,7 +166,7 @@ body.app { padding-bottom: calc(80px + env(safe-area-inset-bottom)); max-width: 
 .form-list select { border: 0; background: transparent; font-size: 15px; color: var(--ink-2); }
 
 /* ── 아래 메뉴 ── */
-nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; max-width: 560px; margin: 0 auto; height: calc(72px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); background: rgba(255, 255, 255, .97); backdrop-filter: blur(10px); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr); z-index: 100; }
+nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; max-width: 560px; margin: 0 auto; height: calc(72px + var(--sab, env(safe-area-inset-bottom))); padding-bottom: var(--sab, env(safe-area-inset-bottom)); background: rgba(255, 255, 255, .97); backdrop-filter: blur(10px); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr); z-index: 100; }
 nav.tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 13px; color: #5F6B7D; position: relative; }
 nav.tabs button.on { color: var(--navy); font-weight: 700; }
 nav.tabs button.sos-tab { color: var(--signal); }
@@ -181,7 +181,7 @@ nav.tabs .dot { position: absolute; top: 10px; right: calc(50% - 16px); width: 8
 .modal-foot .btn { flex: 1; padding: 12px; }
 
 /* ── AI 비서 ── */
-.ai-fab { position: fixed; right: max(16px, calc(50% - 280px + 16px)); bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 90; display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 20px 0 16px; border-radius: 26px; background: var(--navy); color: #fff; font-size: 15px; font-weight: 700; box-shadow: 0 6px 20px rgba(15, 27, 45, .28); }
+.ai-fab { position: fixed; right: max(16px, calc(50% - 280px + 16px)); bottom: calc(88px + var(--sab, env(safe-area-inset-bottom))); z-index: 90; display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 20px 0 16px; border-radius: 26px; background: var(--navy); color: #fff; font-size: 15px; font-weight: 700; box-shadow: 0 6px 20px rgba(15, 27, 45, .28); }
 .ai-fab .ic { color: var(--brass); }
 .modal.ai-modal { padding: 0; display: flex; flex-direction: column; height: 82vh; }
 .ai { display: flex; flex-direction: column; height: 100%; }
@@ -203,7 +203,7 @@ nav.tabs .dot { position: absolute; top: 10px; right: calc(50% - 16px); width: 8
 .ai-msg.draft p { margin: 6px 0 8px; padding: 10px; background: var(--brass-soft); border-radius: 10px; font-size: 14px; }
 .ai-ex { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; border-top: 1px solid var(--line); scrollbar-width: none; }
 .ai-ex button { white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; font-size: 13px; background: var(--surface); }
-.ai-form { display: flex; gap: 8px; padding: 8px 12px calc(12px + env(safe-area-inset-bottom)); }
+.ai-form { display: flex; gap: 8px; padding: 8px 12px calc(12px + var(--sab, env(safe-area-inset-bottom))); }
 .ai-form input { flex: 1; min-width: 0; height: 46px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 15px; }
 .ai-form .btn { width: 46px; padding: 0; }
 .ai-form .mic.on { background: var(--signal); color: #fff; }
@@ -213,11 +213,11 @@ nav.tabs[hidden] { display: none; }
    v0.4 시안 적용 — 인사 + 다음 일정 단계 · 시간선 · 가운데 마이크 · 내 정보
    (위 규칙 중 겹치는 것은 아래가 이겨요)
    ========================================================= */
-body.app { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+body.app { padding-bottom: calc(96px + var(--sab, env(safe-area-inset-bottom))); }
 .demo-bar button { font-weight: 700; text-decoration: underline; font-size: 12px; color: inherit; }
 
 /* 상단: 인사 + 다음 일정 카드 */
-.hero { padding: calc(16px + env(safe-area-inset-top)) 20px 20px; gap: 16px; }
+.hero { padding: calc(16px + var(--sat, env(safe-area-inset-top))) 20px 20px; gap: 16px; }
 .hero-top { align-items: center; font-size: inherit; color: inherit; }
 .hero-top .hello { display: grid; gap: 2px; }
 .hero-top .hello small { font-size: 13px; color: #9AA6B6; }
@@ -280,7 +280,7 @@ body.app { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 .add-private { margin-top: 4px; }
 
 /* 화면 제목 — 밝게, 크게 (비서톡 · 긴급 · 내 정보) */
-.page-head { background: transparent; color: var(--ink); padding: calc(18px + env(safe-area-inset-top)) 20px 4px; }
+.page-head { background: transparent; color: var(--ink); padding: calc(18px + var(--sat, env(safe-area-inset-top))) 20px 4px; }
 .page-head h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; }
 .page-head p { color: var(--slate); font-size: 13.5px; }
 
@@ -317,7 +317,7 @@ body.app { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 .me-foot a, .me-foot button { text-decoration: none; }
 
 /* 아래 메뉴: 5칸 · 가운데 마이크 */
-nav.tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); height: calc(80px + env(safe-area-inset-bottom)); align-items: start; padding-top: 6px; box-sizing: border-box; }
+nav.tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); height: calc(80px + var(--sab, env(safe-area-inset-bottom))); align-items: start; padding-top: 6px; box-sizing: border-box; }
 nav.tabs button { height: 56px; font-size: 11.5px; color: #6B7686; }
 nav.tabs button.on { color: var(--navy); }
 nav.tabs .mic-tab { color: var(--brass-ink); font-weight: 700; justify-content: flex-end; }
@@ -326,7 +326,7 @@ nav.tabs .mic-tab .mic { position: absolute; top: -30px; left: 50%; transform: t
 
 /* AI 비서 — 어두운 전체 화면 */
 .voice-back { position: fixed; inset: 0; z-index: 600; background: #0B1422; display: flex; justify-content: center; }
-.voice { width: 100%; max-width: 560px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: #fff; padding: calc(16px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); }
+.voice { width: 100%; max-width: 560px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: #fff; padding: calc(16px + var(--sat, env(safe-area-inset-top))) 20px calc(24px + var(--sab, env(safe-area-inset-bottom))); }
 .v-head { display: flex; align-items: center; justify-content: space-between; }
 .v-state { font-size: 15px; font-weight: 700; color: #C8AE7E; display: flex; align-items: center; gap: 8px; }
 .v-state i { width: 8px; height: 8px; border-radius: 4px; background: #E0684E; }
@@ -363,14 +363,19 @@ nav.tabs .mic-tab .mic { position: absolute; top: -30px; left: 50%; transform: t
 .na { white-space: nowrap; padding: 0 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .nc-acts.n3 .na { font-size: 13.5px; gap: 4px; }
 /* 아래 메뉴를 최대한 아래로 — 빈 공간 없이 아이폰 홈 막대 바로 위에 */
-nav.tabs { height: auto; padding-top: 4px; padding-bottom: max(2px, calc(env(safe-area-inset-bottom) - 20px)); }
+nav.tabs { height: auto; padding-top: 4px; padding-bottom: max(2px, calc(var(--sab, env(safe-area-inset-bottom)) - 20px)); }
 nav.tabs button { height: 50px; justify-content: flex-end; gap: 2px; padding-bottom: 2px; }
-body.app { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+body.app { padding-bottom: calc(72px + var(--sab, env(safe-area-inset-bottom))); }
 nav.tabs .mic-tab .mic { top: -34px; width: 60px; height: 60px; border-radius: 30px; }
 /* 위쪽 여백 줄이기 — 상태 표시줄 공간은 한 번만, 데모 안내는 그 아래 한 줄로 */
-.demo-bar { padding-top: calc(env(safe-area-inset-top) + 4px); padding-bottom: 6px; }
-.hero { padding-top: calc(6px + env(safe-area-inset-top)); }
-.page-head { padding-top: calc(8px + env(safe-area-inset-top)); }
+.demo-bar { padding-top: calc(var(--sat, env(safe-area-inset-top)) + 4px); padding-bottom: 6px; }
+.hero { padding-top: calc(6px + var(--sat, env(safe-area-inset-top))); }
+.page-head { padding-top: calc(8px + var(--sat, env(safe-area-inset-top))); }
 .demo-bar + .hero { padding-top: 10px; }
 .demo-bar + .page-head { padding-top: 10px; }
 .demo-bar + .plan-lock-wrap .plan-lock { margin-top: 24px; }
+
+/* 제목 · 인사는 상태 표시줄 바로 아래부터 (아이폰 앱은 실제 여백 값을 --sat 로 넘겨 줘요) */
+.hero { padding-top: calc(4px + var(--sat, env(safe-area-inset-top))); }
+.page-head { padding-top: calc(4px + var(--sat, env(safe-area-inset-top))); }
+.me { padding-top: 4px; }
