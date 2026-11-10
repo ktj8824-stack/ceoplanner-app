@@ -57,8 +57,8 @@ const App = {
 
   render() {
     document.querySelectorAll('#tabs button').forEach(b => { b.classList.toggle('on', b.dataset.tab === this.tab); b.setAttribute('aria-current', b.dataset.tab === this.tab ? 'page' : 'false'); });
-    // 아이폰 앱(파일로 열림)에서는 데모 안내 줄을 빼서 화면을 위로 (내 정보 아래에 '데모 데이터 처음으로'는 그대로)
-    const demo = Store.mode === 'demo' && location.protocol !== 'file:' ? `<div class="demo-bar">데모 모드 · <a href="${U.esc(CEOP_CONFIG.SECRETARY_URL)}" target="_blank">비서 웹</a>과 바로 연동돼요${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''}</div>` : '';
+    // 데모 안내 줄은 대표 앱에 표시하지 않아요 (내 정보 아래에 '데모 데이터 처음으로' · '데모 끝내기')
+    const demo = '';
     const root = document.getElementById('root');
     const ps = Plan.state();
     document.getElementById('tabs').hidden = !ps.active;
@@ -290,7 +290,7 @@ const App = {
           ${sizes}</div></section>
         <section class="group"><h2>구독</h2><div class="box">
           <a class="set-row" href="${U.esc(Plan.payUrl())}"><span class="l">${U.esc(Plan.NAMES[ps.plan])}<small>${U.esc(Plan.summary())}</small></span><span class="v strong">${ps.plan === 'trial' || ps.plan === 'expired' ? '결제' : '연장'}${Icon.svg('chevron', 16)}</span></a></div></section>
-        <p class="me-foot">${Store.mode === 'demo' ? '<button data-reset>데모 데이터 처음으로</button>' : '<button data-logout>로그아웃</button>'} · <a href="privacy.html" target="_blank">개인정보 처리방침</a> · 버전 0.4</p>
+        <p class="me-foot">${Store.mode === 'demo' ? `<button data-reset>데모 데이터 처음으로</button>${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''}` : '<button data-logout>로그아웃</button>'} · <a href="privacy.html" target="_blank">개인정보 처리방침</a> · 버전 0.4</p>
       </div>`;
   },
 
