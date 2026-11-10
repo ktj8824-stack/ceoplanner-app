@@ -401,3 +401,7 @@ nav.tabs .mic-tab .mic { top: -34px; width: 60px; height: 60px; border-radius: 3
 nav.tabs { padding-bottom: max(10px, calc(var(--sab, env(safe-area-inset-bottom)) - 12px)); }
 nav.tabs .mic-tab .mic { top: -26px; }
 nav.tabs .mic-tab > span:last-child { transform: translateY(8px); }
+/* 아이콘 8px 더 위로 (모두 16px) — AI 비서 원 · 글자는 계속 그 자리 */
+nav.tabs { padding-bottom: max(18px, calc(var(--sab, env(safe-area-inset-bottom)) - 4px)); }
+nav.tabs .mic-tab .mic { top: -18px; }
+nav.tabs .mic-tab > span:last-child { transform: translateY(16px); }
