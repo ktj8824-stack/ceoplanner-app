@@ -362,3 +362,8 @@ nav.tabs .mic-tab .mic { position: absolute; top: -30px; left: 50%; transform: t
 .tl-gap.conflict button { height: 40px; }
 .na { white-space: nowrap; padding: 0 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .nc-acts.n3 .na { font-size: 13.5px; gap: 4px; }
+/* 아래 메뉴를 최대한 아래로 — 빈 공간 없이 아이폰 홈 막대 바로 위에 */
+nav.tabs { height: auto; padding-top: 4px; padding-bottom: max(2px, calc(env(safe-area-inset-bottom) - 20px)); }
+nav.tabs button { height: 50px; justify-content: flex-end; gap: 2px; padding-bottom: 2px; }
+body.app { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+nav.tabs .mic-tab .mic { top: -34px; width: 60px; height: 60px; border-radius: 30px; }
