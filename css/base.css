@@ -112,3 +112,49 @@ a { color: inherit; }
 .plan-mini { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 6px; }
 .plan-mini li { display: flex; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 15px; }
 .plan-lock-wrap { padding: 0 16px; }
+
+/* ── 시작 · 로그인 · 회사 등록 (로드플래너 · 마이플래너와 같은 구성) ── */
+.auth { max-width: 440px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; box-sizing: border-box; display: flex; flex-direction: column; padding: calc(56px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); }
+.auth-start { color: #fff; position: relative; isolation: isolate; }
+.auth-start::before { content: ''; position: fixed; inset: 0 0 auto 0; height: 46vh; background: var(--navy); z-index: -1; }
+.auth-brand { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.auth-logo { width: 84px; height: 84px; border-radius: 22px; box-shadow: 0 12px 30px rgba(0, 0, 0, .35); }
+.auth-brand h1 { margin: 2px 0 0; font-size: 30px; font-weight: 800; letter-spacing: -0.03em; }
+.auth-brand p { margin: 0; font-size: 15px; line-height: 1.55; color: #C9D1DC; }
+.auth-choices { margin-top: 44px; display: grid; gap: 12px; }
+.auth-choices h2 { margin: 0 0 0 4px; font-size: 16px; font-weight: 700; color: #fff; }
+.auth-card { display: flex; align-items: center; gap: 14px; width: 100%; padding: 18px; border-radius: 18px; background: var(--surface); color: var(--ink); text-align: left; box-shadow: 0 8px 24px rgba(15, 27, 45, .16); }
+.auth-card .ico { width: 48px; height: 48px; border-radius: 14px; background: var(--porcelain); color: var(--navy); display: grid; place-items: center; flex: none; }
+.auth-card .ico.brass { background: var(--brass-soft); color: var(--brass-ink); }
+.auth-card .t { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.auth-card b { font-size: 17px; }
+.auth-card small { font-size: 13.5px; color: var(--slate); }
+.auth-card > .ic:last-child { color: var(--slate); }
+.auth-demo { margin-top: 4px; min-height: 52px; border: 1.5px dashed #B8C0CB; border-radius: 14px; color: var(--slate); font-size: 14.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.auth-foot { margin-top: auto; padding-top: 28px; display: grid; gap: 6px; text-align: center; font-size: 12.5px; color: var(--slate); }
+.auth-foot a { color: var(--brass-ink); }
+.auth-form { color: var(--ink); gap: 0; }
+.auth-back { width: 44px; height: 44px; margin-left: -10px; border-radius: 12px; display: grid; place-items: center; color: var(--ink); }
+.auth-title { margin-top: 14px; display: grid; gap: 8px; }
+.auth-title h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+.auth-title p { margin: 0; font-size: 14.5px; color: var(--slate); line-height: 1.5; }
+.auth-ok { width: 52px; height: 52px; border-radius: 26px; background: var(--ok-soft); color: var(--ok); display: grid; place-items: center; }
+.auth-fields { margin-top: 28px; display: grid; gap: 14px; }
+.auth-fields label { display: grid; gap: 7px; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
+.auth-fields input, .auth.login input:not([type=radio]):not([type=checkbox]) { height: 54px; border-radius: 14px; border: 1.5px solid #D5DAE1; background: var(--surface); padding: 0 16px; font-size: 17px; }
+.auth-fields input:focus, .auth.login input:focus { outline: none; border-color: var(--navy); }
+.auth-primary { margin-top: 6px; height: 56px; border-radius: 16px; background: var(--navy); color: #fff; font-size: 17px; font-weight: 700; display: flex; align-items: center; justify-content: center; text-decoration: none; width: 100%; }
+.auth-primary:disabled { opacity: .6; }
+.auth-note { margin-top: 22px; background: var(--surface); border-radius: 14px; padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; color: var(--brass-ink); }
+.auth-note p { margin: 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.6; }
+.auth-note b { color: var(--ink); }
+.auth-switch { margin: auto 0 0; padding-top: 24px; text-align: center; font-size: 14px; color: var(--slate); }
+.auth-switch button { color: var(--brass-ink); font-weight: 700; font-size: 14px; }
+/* 회사 등록 · 가입 완료도 같은 화면 틀 (기존 .login 카드 모양은 끔) */
+.auth.login { max-width: 480px; margin: 0 auto; background: transparent; box-shadow: none; border-radius: 0; gap: 14px; padding-top: calc(56px + env(safe-area-inset-top)); }
+.auth.login fieldset { background: var(--surface); border: 0; border-radius: 16px; padding: 14px 16px 16px; }
+.auth.login legend { float: left; width: 100%; padding: 0 0 4px; font-size: 15px; }
+.auth.login .auth-primary { margin-top: 4px; }
+.auth.login .auth-switch { margin-top: 0; padding-top: 8px; }
+.auth.login .auth-title { margin-top: 0; }
+body.sec .auth-start::before { height: 44vh; }

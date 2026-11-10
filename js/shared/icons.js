@@ -29,6 +29,8 @@ const Icon = (() => {
     train: '<rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14"/><path d="m8 21 2-4"/><path d="m16 21-2-4"/>',
     plane: '<path d="M10.5 21 12 17l4 3v-2.5L13 13l7-1.5V9l-7 1V4.5a1 1 0 0 0-2 0V10L4 9v2.5l7 1.5-3 4.5V20z"/>',
     walk: '<circle cx="13" cy="4" r="1.6"/><path d="m9 21 2.5-6.5L14 16v5"/><path d="M8 11.5 10.5 8h3l2 4 2.5 1"/>',
+    bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/>',
     building: '<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
     door: '<path d="M14 3H6v18h8"/><path d="M14 3l5 2v14l-5 2z"/><circle cx="16.5" cy="12" r=".5"/>',

@@ -1,8 +1,8 @@
 /* =========================================
-   CEO플래너 — CEO 앱 (모바일)
-   아래 메뉴: 홈 · 비서톡 · 긴급 · 내 정보
-   홈: 다음 출발(크게) + 확인 버튼 + 오늘 일정
-       다음 일정만 펼치고, 끝난 일정 · 나머지는 한 줄 (누르면 펼침)
+   CEO플래너 — 대표 앱 (모바일)
+   아래 메뉴: 홈 · 비서톡 · [가운데 마이크 = AI 비서] · 긴급 · 내 정보
+   홈: 인사 + 다음 일정까지 단계(기사 호출 → 출발 → 도착 → 시작) + 오늘 시간선
+       시간선은 일정 사이에 이동 시간, 겹치면 그 사이에 빨간 줄 하나
    입력은 비서가 하고, 대표는 확인 · 요청 · 개인 일정만.
    ========================================= */
 const App = {
@@ -13,8 +13,8 @@ const App = {
   seenMsgs: 0,
   _timers: [],
 
-  TABS: [['home', 'home', '홈'], ['chat', 'chat', '비서톡'], ['sos', 'siren', '긴급'], ['me', 'user', '내 정보']],
-  SIZES: { m: ['보통', 1], l: ['크게', 1.1], xl: ['아주 크게', 1.22] },
+  TABS: [['home', 'home', '홈'], ['chat', 'chat', '비서톡'], ['ai', 'mic', 'AI 비서'], ['sos', 'siren', '긴급'], ['me', 'user', '내 정보']],
+  SIZES: { m: ['보통', 1], l: ['크게', 1.1], xl: ['아주', 1.22] },
   PREP: [30, 45, 60, 75, 90, 120],
 
   async start() {
@@ -33,8 +33,10 @@ const App = {
     this.seenMsgs = Number(localStorage.getItem('CEOP_SEEN_CEO') || 0);
     const nav = document.getElementById('tabs');
     nav.hidden = false;
-    nav.innerHTML = this.TABS.map(([k, ic, l]) => `<button data-tab="${k}" class="${k === 'sos' ? 'sos-tab' : ''}">${Icon.svg(ic, 24)}<span>${l}</span></button>`).join('');
-    nav.addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) this.go(b.dataset.tab); });
+    nav.innerHTML = this.TABS.map(([k, ic, l]) => k === 'ai'
+      ? `<button data-tab="ai" class="mic-tab" aria-label="AI 비서에게 말하기"><span class="mic">${Icon.svg('mic', 28)}</span><span>${l}</span></button>`
+      : `<button data-tab="${k}">${Icon.svg(ic, 24)}<span>${l}</span></button>`).join('');
+    nav.addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (!b) return; if (b.dataset.tab === 'ai') this.openAI(); else this.go(b.dataset.tab); });
     Store.on(() => { this.render(); this.scheduleAlerts(); });
     this.render();
     this.scheduleAlerts();
@@ -47,15 +49,15 @@ const App = {
     window.scrollTo(0, tab === 'chat' ? document.body.scrollHeight : 0);
   },
 
-  // 글자 크기 — 이 기기에만 저장 (보통 · 크게 · 아주 크게, 기본 크게)
-  size() { return this.SIZES[localStorage.getItem('CEOP_FONT')] ? localStorage.getItem('CEOP_FONT') : 'l'; },
+  // 글자 크기 — 이 기기에만 저장 (보통 · 크게 · 아주, 기본 보통)
+  size() { return this.SIZES[localStorage.getItem('CEOP_FONT')] ? localStorage.getItem('CEOP_FONT') : 'm'; },
   applySize() { document.getElementById('root').style.zoom = this.SIZES[this.size()][1]; },
 
   notifState() { return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission; },
 
   render() {
     document.querySelectorAll('#tabs button').forEach(b => { b.classList.toggle('on', b.dataset.tab === this.tab); b.setAttribute('aria-current', b.dataset.tab === this.tab ? 'page' : 'false'); });
-    const demo = Store.mode === 'demo' ? `<div class="demo-bar">데모 모드입니다. 같은 브라우저에서 <a href="${U.esc(CEOP_CONFIG.SECRETARY_URL)}" target="_blank">비서 웹</a>을 열면 양쪽에 바로 반영돼요.</div>` : '';
+    const demo = Store.mode === 'demo' ? `<div class="demo-bar">데모 모드 · <a href="${U.esc(CEOP_CONFIG.SECRETARY_URL)}" target="_blank">비서 웹</a>과 바로 연동돼요${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''}</div>` : '';
     const root = document.getElementById('root');
     const ps = Plan.state();
     document.getElementById('tabs').hidden = !ps.active;
@@ -88,46 +90,53 @@ const App = {
 
   // ───────── 홈 ─────────
   home() {
-    return this.hero() + `<div class="body">${this.view === 'timeline' ? this.dayList() : this.calendar()}</div>`
-      + `<button class="ai-fab" data-ai aria-label="AI 비서 열기">${Icon.svg('mic', 20)}<span>AI 비서</span></button>`;
+    return this.hero() + `<div class="body">${this.view === 'timeline' ? this.dayList() : this.calendar()}</div>`;
   },
 
-  notifBanner(where) {
-    const n = this.notifState();
-    if (n === 'granted' || n === 'unsupported') return '';
-    return `<button class="notif-banner ${where}" data-notif>${Icon.svg('bell', 18)}<span>기상 · 출발 알림이 ${n === 'denied' ? '차단돼 있어요' : '꺼져 있어요'}</span><u>${n === 'denied' ? '방법 보기' : '켜기'}</u></button>`;
+  greet() { const h = new Date().getHours(); return h < 11 ? '좋은 아침이에요' : h < 18 ? '좋은 오후예요' : '오늘도 수고하셨어요'; },
+  longDate(ymd) { const d = U.at(ymd, '00:00'); return `${d.getMonth() + 1}월 ${d.getDate()}일 ${U.WEEK[d.getDay()]}요일`; },
+
+  /** 다음 일정까지 단계 — 기사 호출 → 출발 → 도착 → 시작 (움직이지 않는 일정은 시작 → 종료) */
+  steps(s, pl) {
+    const names = { driver: '기사 호출', leave: '출발', arrive: '도착', start: '시작', end: '종료' };
+    const want = s.mode !== 'none' ? ['driver', 'leave', 'arrive', 'start'] : ['start', 'end'];
+    const seen = new Set();
+    return pl.items.filter(it => want.includes(it.kind) && !seen.has(it.kind) && seen.add(it.kind)).map(it => ({ kind: it.kind, label: names[it.kind], at: it.at }));
   },
 
   hero() {
     const p = this.profile();
     const now = new Date();
-    const top = `<div class="hero-top"><span>${this.dateTitle(U.today())}</span><span>${U.esc(p.name || '대표')}님</span></div>`;
+    const off = !['granted', 'unsupported'].includes(this.notifState());
+    const top = `<div class="hero-top"><div class="hello"><small>${this.longDate(U.today())}</small><b>${U.esc(p.name || '대표')}님, ${this.greet()}</b></div>
+      <button class="hero-bell" data-bell aria-label="${off ? '기상 · 출발 알림 꺼짐 — 켜기' : '알림 켜짐'}">${Icon.svg('bell', 20)}${off ? '<i></i>' : ''}</button></div>`;
     const n = this.next();
-    if (!n) return `<header class="hero rest">${top}${this.notifBanner('in-hero')}<p class="hero-label">남은 일정</p><div class="hero-time"><b>오늘은 끝났어요</b></div>
-      <div class="hero-meta">내일 일정은 비서가 정리하면 여기에 표시돼요.</div></header>`;
+    if (!n) return `<header class="hero">${top}<div class="next-card rest"><b>남은 일정이 없어요</b><span>내일 일정은 비서가 정리하면 여기에 보여요.</span></div></header>`;
     const { s, p: pl } = n;
-    const moving = s.mode !== 'none' && pl.leaveAt > now;
-    const target = moving ? pl.leaveAt : pl.startAt;
-    const left = U.diffMin(target, now);
-    const label = moving ? (s.date === U.today() ? '다음 출발' : '내일 첫 출발') : left > 0 ? (s.date === U.today() ? '다음 일정' : '내일 첫 일정') : '진행 중';
-    const leftTxt = left > 0 ? `${U.durLabel(left)} 남음` : `${s.end}까지`;
     const priv = s.visibility === 'private';
-    const driver = moving && pl.driverCallAt
-      ? `<div class="hero-driver">${Icon.svg('car', 17)}${U.esc(p.driverName || '기사')}님이 ${U.hm(pl.driverCallAt)}부터 ${pl.driverCallAt <= now ? '대기 중' : '대기 예정'}</div>` : '';
-    const wake = moving && pl.wakeAt && pl.wakeAt > now ? `<div class="hero-sub">기상 ${U.hm(pl.wakeAt)} · 준비 ${U.durLabel(p.prepMin || 60)}</div>` : '';
-    const hasBrief = s.briefing && s.briefing.who;
-    return `<header class="hero">${top}${this.notifBanner('in-hero')}
-      <p class="hero-label">${label}</p>
-      <div class="hero-time"><b>${U.hm(target)}</b><span class="pill">${leftTxt}</span></div>
-      <div class="hero-what">
-        <strong>${U.esc(s.title)}</strong>
-        <div class="hero-sub">${s.start} 시작${s.location ? ' · ' + U.esc(s.location) : ''}</div>
-        ${driver}${wake}
-      </div>
-      ${priv ? '' : `<button class="hero-confirm ${s.ackAt ? 'done' : ''}" data-ack="${s.id}" ${s.ackAt ? 'disabled' : ''}>${s.ackAt ? `${Icon.svg('check', 18)} 확인했어요 · 비서에게 전달됨` : '이 일정 확인했어요'}</button>`}
-      <div class="hero-actions">
-        ${priv ? '' : `<button class="btn" data-late="${s.id}">10분 늦어요</button>`}
-        ${hasBrief ? `<button class="btn" data-brief="${s.id}">${Icon.svg('file', 17)} 미팅 브리핑</button>` : s.location ? `<a class="btn" href="${U.tmapLink(s.location)}">${Icon.svg('nav', 17)} 길안내</a>` : ''}
+    const steps = this.steps(s, pl);
+    const cur = steps.findIndex(st => st.at > now);          // 지금 기다리는 단계 (-1 = 모두 지남 → 진행 중)
+    const target = cur >= 0 ? steps[cur] : null;
+    const left = target ? U.diffMin(target.at, now) : 0;
+    const pill = !target ? `${s.end}까지 진행 중` : left < 60 ? `${target.label} ${left}분 전` : `${target.label}까지 ${U.durLabel(left)}`;
+    const mode = Backtime.MODES[s.mode] || Backtime.MODES.none;
+    const sub = [s.location ? U.esc(s.location) : '', s.mode !== 'none' ? `${mode.label}${s.travelMin ? ' ' + U.durLabel(s.travelMin) : ''}` : ''].filter(Boolean).join(' · ');
+    const fill = steps.length > 1 ? (cur < 0 ? 1 : cur / (steps.length - 1)) : 0;
+    const stepHtml = `<ol class="steps" style="--n:${steps.length};--fill:${fill.toFixed(3)}">${steps.map((st, i) =>
+      `<li class="${cur < 0 || i < cur ? 'done' : i === cur ? 'now' : ''}"><i>${cur < 0 || i < cur ? Icon.svg('check', 12) : ''}</i><span>${st.label}</span><b>${U.hm(st.at)}</b></li>`).join('')}</ol>`;
+    const acts = [];
+    if (s.mode === 'driver' && p.driverPhone) acts.push(`<a class="na light" href="${U.telLink(p.driverPhone)}">${Icon.svg('phone', 16)} ${U.esc(p.driverName || '기사')}님</a>`);
+    else if (s.briefing && s.briefing.who) acts.push(`<button class="na light" data-brief="${s.id}">${Icon.svg('file', 16)} 미팅 브리핑</button>`);
+    else if (s.location) acts.push(`<a class="na light" href="${U.tmapLink(s.location)}">${Icon.svg('nav', 16)} 길안내</a>`);
+    if (!priv) acts.push(`<button class="na" data-late="${s.id}">10분 늦어요</button>`);
+    if (s.mode === 'driver' && p.driverPhone && s.briefing && s.briefing.who) acts.push(`<button class="na" data-brief="${s.id}">${Icon.svg('file', 16)} 브리핑</button>`);
+    const ack = !priv && !s.ackAt ? `<button class="next-ack" data-ack="${s.id}">${Icon.svg('check', 16)} 이 일정 확인했어요</button>` : '';
+    return `<header class="hero">${top}
+      <div class="next-card">
+        <div class="nc-head"><div><small>${s.date === U.today() ? '다음 일정' : '내일 첫 일정'} · ${s.start}</small><b>${priv ? Icon.svg('lock', 16) + ' ' : ''}${U.esc(s.title)}</b>${sub ? `<span>${sub}</span>` : ''}</div>
+          <span class="pill">${pill}</span></div>
+        ${stepHtml}
+        <div class="nc-acts n${acts.length}">${acts.join('')}</div>${ack}
       </div></header>`;
   },
 
@@ -136,44 +145,47 @@ const App = {
     const list = this.dayPlan(this.day);
     const warns = Backtime.conflicts(Store.byDate(this.day).filter(s => s.status !== 'cancelled'));
     const now = new Date();
-    const auto = (list.find(({ p }) => p.endAt > now) || {}).s;
-    const openId = this.openId && list.some(x => x.s.id === this.openId) ? this.openId : auto && auto.id;
     const next = this.next();
     const head = `<div class="list-head">
         ${isToday ? '' : `<button class="link" data-today>${Icon.svg('left', 16)} 오늘</button>`}
-        <h2>${isToday ? '오늘' : this.dateTitle(this.day)} 일정 ${list.length}건</h2>
+        <h2>${isToday ? '오늘' : this.dateTitle(this.day)} ${list.length}건</h2>
         <button class="link" data-view="calendar">캘린더 ${Icon.svg('chevron', 16)}</button></div>`;
-    const rows = list.map(({ s, p }) => {
+    const rows = list.map(({ s, p }, i) => {
       const w = warns.find(x => x.b.id === s.id);
+      let gap = '';
+      if (i > 0) {
+        if (w) gap = this.conflictGap(w);
+        else if (s.mode !== 'none' && s.travelMin) gap = `<span></span><div class="tl-gap move">${Icon.mode(s.mode, 14)} 이동 ${U.durLabel(s.travelMin)} · ${U.esc((Backtime.MODES[s.mode] || {}).label || '')}</div>`;
+        else gap = '<span></span><div class="tl-gap"></div>';
+      } else if (w) gap = this.conflictGap(w);
       const past = p.endAt < now;
-      let html = w ? this.conflictBox(w) : '';
-      if (past) html += this.rowPast(s);
-      else if (s.id === openId) html += this.card(s, p, next && next.s.id === s.id);
-      else html += this.row(s);
-      return html;
+      const isNext = next && next.s.id === s.id;
+      const item = this.openId === s.id ? this.card(s, p, isNext) : past ? this.rowPast(s) : this.row(s, isNext);
+      return `${gap}<span class="tl-t ${past ? 'past' : ''} ${isNext ? 'next' : ''}">${s.start}</span>${item}`;
     }).join('');
-    return head + (rows || '<div class="empty-day">이 날은 일정이 없어요.</div>') +
+    return head + (rows ? `<div class="tl">${rows}</div>` : '<div class="empty-day">이 날은 일정이 없어요.</div>') +
       `<button class="add-private" data-addprivate>${Icon.svg('plus', 16)} 개인 일정 추가</button>`;
   },
 
-  conflictBox(w) {
+  /** 겹침: 두 일정 사이에 빨간 줄 하나 + 조정 요청 */
+  conflictGap(w) {
     const asked = this.sentAbout(w.b.id, '조정');
     const name = this.profile().secretaryName || '비서';
-    return `<div class="conflict" role="note"><p>${Icon.svg('alert', 18)}<span>${U.esc(w.msg)}</span></p>
-      <button class="${asked ? 'sent' : ''}" data-adjust="${w.b.id}" data-prev="${w.a.id}" ${asked ? 'disabled' : ''}>${asked ? `${Icon.svg('check', 16)} 조정 요청 보냄 · ${U.esc(name)} 확인 중` : '비서에게 조정 요청'}</button></div>`;
+    const txt = w.shortMin && !/겹/.test(w.msg) ? `이동 시간이<br>${w.shortMin}분 부족해요` : '앞 일정과<br>시간이 겹쳐요';
+    return `<span></span><div class="tl-gap conflict" role="note"><i class="bar"></i><div class="cg"><span title="${U.esc(w.msg)}">${txt}</span>
+      <button class="${asked ? 'sent' : ''}" data-adjust="${w.b.id}" data-prev="${w.a.id}" ${asked ? 'disabled' : ''}>${asked ? `${Icon.svg('check', 14)} ${U.esc(name)} 확인 중` : '비서에게 조정'}</button></div></div>`;
   },
 
   rowPast(s) {
-    return `<div class="row past"><span class="t">${s.start}</span><span class="n">${U.esc(s.title)}</span><span class="done">${Icon.svg('check', 16)} 끝남</span></div>`;
+    return `<div class="tl-item past"><span class="n">${U.esc(s.title)}</span><span class="done">끝남</span></div>`;
   },
 
-  row(s) {
+  row(s, isNext) {
     const priv = s.visibility === 'private';
-    if (priv) return `<div class="row private" data-open="${s.id}"><span class="t">${s.start}</span><span class="n">${Icon.svg('lock', 16)} ${U.esc(s.title)}</span><span class="tag">비서에겐 '바쁨'</span></div>`;
-    const sub = s.ackAt ? U.esc(s.location || '') : `<em>확인 대기</em>${s.location ? ' · ' + U.esc(s.location) : ''}`;
-    return `<div class="row" data-open="${s.id}"><span class="t">${s.start}</span>
-      <span class="n">${U.esc(s.title)}<small>${sub}</small></span>
-      ${s.ackAt ? `<span class="ok">${Icon.svg('check', 16)} 확인함</span>` : `<button class="mini" data-ack="${s.id}">확인</button>`}</div>`;
+    if (priv) return `<div class="tl-item private" data-open="${s.id}"><span class="n">${Icon.svg('lock', 14)} ${U.esc(s.title)}</span><span class="tag">비서에겐 '바쁨'</span></div>`;
+    const bits = [s.location ? U.esc(s.location) : '', s.end ? `${s.end}까지` : '', s.briefing && s.briefing.who ? '브리핑 있음' : ''].filter(Boolean).join(' · ');
+    return `<div class="tl-item ${isNext ? 'is-next' : ''}" data-open="${s.id}"><span class="n">${U.esc(s.title)}<small>${s.ackAt ? '' : '<em>확인 대기</em>' + (bits ? ' · ' : '')}${bits}</small></span>
+      ${s.ackAt ? `<span class="ok" aria-label="확인함">${Icon.svg('check', 16)}</span>` : `<button class="mini" data-ack="${s.id}">확인</button>`}</div>`;
   },
 
   card(s, p, isNext) {
@@ -184,18 +196,17 @@ const App = {
     const steps = go ? p.items.filter(it => !['start', 'end'].includes(it.kind)) : [];
     const route = steps.length ? `<ol class="route">${steps.map(it =>
       `<li class="${it.kind} ${it.at < now ? 'done' : ''}"><b>${U.hm(it.at)}</b><span>${U.esc(it.title)}${it.detail ? ` <small>${U.esc(it.detail)}</small>` : ''}</span></li>`).join('')}</ol>` : '';
-    const badge = priv ? `<span class="tag">비서에겐 '바쁨'</span>` : isNext ? '<span class="badge next">다음 일정</span>' : s.ackAt ? '<span class="badge ok">확인함</span>' : '<span class="badge warn">확인 대기</span>';
+    const badge = priv ? `<span class="tag">비서에겐 '바쁨'</span>` : s.ackAt ? '<span class="badge ok">확인함</span>' : '<span class="badge warn">확인 대기</span>';
     const acts = [];
-    if (!priv && !s.ackAt && !isNext) acts.push(`<button class="primary" data-ack="${s.id}">확인</button>`);
-    if (s.briefing && s.briefing.who && !isNext) acts.push(`<button data-brief="${s.id}">${Icon.svg('file', 16)} 브리핑</button>`);
+    if (!priv && !s.ackAt) acts.push(`<button class="primary" data-ack="${s.id}">확인</button>`);
+    if (s.briefing && s.briefing.who) acts.push(`<button data-brief="${s.id}">${Icon.svg('file', 16)} 브리핑</button>`);
     if (s.location) acts.push(`<a href="${U.tmapLink(s.location)}">${Icon.svg('nav', 16)} 길안내</a>`);
     if (!priv) acts.push(`<button data-postpone="${s.id}" ${this.sentAbout(s.id, '미뤄') ? 'disabled' : ''}>${this.sentAbout(s.id, '미뤄') ? '변경 요청 보냄' : '변경 요청'}</button>`);
     else acts.push(`<button data-delprivate="${s.id}">삭제</button>`);
     return `<article class="card ${isNext ? 'is-next' : ''} ${priv ? 'private' : ''}">
-      <div class="card-top"><span class="t"><b>${s.start}</b><small>${s.end}</small></span>
-        <span class="n"><strong>${priv ? Icon.svg('lock', 16) + ' ' : ''}${U.esc(s.title)}</strong><small>${[s.location ? U.esc(s.location) : '', go ? mode.label : ''].filter(Boolean).join(' · ')}</small></span>${badge}</div>
+      <div class="card-top"><span class="n"><strong>${priv ? Icon.svg('lock', 16) + ' ' : ''}${U.esc(s.title)}</strong><small>${[`${s.start}–${s.end}`, s.location ? U.esc(s.location) : '', go ? mode.label : ''].filter(Boolean).join(' · ')}</small></span>${badge}</div>
       ${route}<div class="card-actions">${acts.join('')}</div>
-      ${this.openId === s.id ? `<button class="fold" data-fold>접기</button>` : ''}</article>`;
+      <button class="fold" data-fold>접기</button></article>`;
   },
 
   calendar() {
@@ -252,32 +263,33 @@ const App = {
   me() {
     const p = this.profile();
     const n = this.notifState();
+    const ps = Plan.state();
     const person = (initial, name, role, phone, chat) => `<div class="person"><span class="av">${U.esc(initial)}</span>
-      <span class="who"><b>${U.esc(name)} <small>${role}</small></b><span class="num">${U.esc(phone || '연락처 없음')}</span></span>
-      ${phone ? `<a class="sq call" href="${U.telLink(phone)}" aria-label="${U.esc(name)}에게 전화">${Icon.svg('phone', 20)}</a>` : ''}
-      ${chat ? `<button class="sq" data-tabgo="chat" aria-label="${U.esc(name)}에게 비서톡">${Icon.svg('chat', 20)}</button>` : `<a class="sq" href="sms:${String(phone || '').replace(/[^0-9+]/g, '')}" aria-label="${U.esc(name)}에게 문자">${Icon.svg('sms', 20)}</a>`}</div>`;
-    const setRow = (key, label, value) => `<button class="set-row" data-edit="${key}"><span>${label}</span><span class="v">${U.esc(value)}${Icon.svg('chevron', 16)}</span></button>`;
-    const notifBox = n === 'default' || n === 'denied' ? `<section class="notif-box"><b>${Icon.svg('bell', 20)} 기상 · 출발 알림이 ${n === 'denied' ? '차단돼 있어요' : '꺼져 있어요'}</b>
-        <p>${n === 'denied' ? '브라우저 설정 → 사이트 설정 → 알림에서 이 사이트를 허용으로 바꿔 주세요.' : '켜 두면 기상 · 기사님 대기 · 출발 시간을 미리 알려 드려요.'}</p>
-        ${n === 'default' ? '<button data-notif>알림 켜기</button>' : ''}</section>` : '';
-    return `<header class="me-head"><span class="av big">${U.esc((p.name || '대').slice(0, 1))}</span>
-        <span><b>${U.esc(p.name || '대표')}님</b><small>비서실과 연결됨 · ${U.esc(p.secretaryName || '비서')} · ${U.esc(p.driverName || '기사')}</small></span></header>
+      <span class="who"><b>${U.esc(name)}</b><span>${role} · ${U.esc(phone || '연락처 없음')}</span></span>
+      ${phone ? `<a class="sq call" href="${U.telLink(phone)}" aria-label="${U.esc(name)}에게 전화">${Icon.svg('phone', 18)}</a>` : ''}
+      ${chat ? `<button class="sq" data-tabgo="chat" aria-label="${U.esc(name)}에게 비서톡">${Icon.svg('chat', 18)}</button>` : `<a class="sq" href="sms:${String(phone || '').replace(/[^0-9+]/g, '')}" aria-label="${U.esc(name)}에게 문자">${Icon.svg('sms', 18)}</a>`}</div>`;
+    const row = (attrs, label, value, sub) => `<button class="set-row" ${attrs}><span class="l">${label}${sub ? `<small>${sub}</small>` : ''}</span><span class="v">${U.esc(value)}${Icon.svg('chevron', 16)}</span></button>`;
+    const notifRow = n === 'unsupported' ? '' : n === 'granted'
+      ? `<div class="set-row static"><span class="l">기상 · 출발 알림<small>미리 깨워 드려요</small></span><span class="switch on" aria-hidden="true"></span></div>`
+      : `<button class="set-row" data-notif><span class="l">기상 · 출발 알림<small class="warn">${n === 'denied' ? '차단돼 있어요 — 눌러서 방법 보기' : '꺼져 있어요 — 켜 두면 미리 깨워 드려요'}</small></span><span class="switch" aria-hidden="true"></span></button>`;
+    const sizes = `<div class="set-row static"><span class="l">글자 크기</span><span class="seg-mini" role="group" aria-label="글자 크기">${Object.entries(this.SIZES).map(([k, [l]]) => `<button class="sz-${k}" data-size="${k}" aria-pressed="${this.size() === k}">${l}</button>`).join('')}</span></div>`;
+    return `<header class="page-head"><h1>내 정보</h1></header>
       <div class="me">
-        ${notifBox}
-        <section class="group"><h2>비서 · 기사님</h2>
+        <div class="me-card"><span class="av big">${U.esc((p.name || '대').slice(0, 1))}</span>
+          <span class="who"><b>${U.esc(p.name || '대표')}</b><small>${Store.myLogin ? '아이디 ' + U.esc(Store.myLogin) : '비서실과 연결됨'}</small></span>
+          <span class="plan-badge ${ps.plan}">${U.esc(Plan.NAMES[ps.plan])}</span></div>
+        <section class="group"><h2>함께 일하는 사람</h2><div class="box">
           ${person((p.secretaryName || '비').slice(0, 1), p.secretaryName || '비서', '비서', p.secretaryPhone, true)}
           ${person((p.driverName || '기').slice(0, 1), p.driverName || '기사님', '기사', p.driverPhone, false)}
-          <button class="set-row" data-edit="contacts"><span>연락처 고치기</span><span class="v">${Icon.svg('chevron', 16)}</span></button></section>
-        <section class="group"><h2>나</h2>
-          ${setRow('name', '이름', p.name || '')}
-          ${setRow('prep', '아침 준비 시간', U.durLabel(p.prepMin || 60))}
-          ${n === 'granted' ? setRow('notif', '기상 · 출발 알림', '켜짐') : ''}</section>
-        <section class="group"><h2>구독</h2>
-          <a class="set-row" href="${U.esc(Plan.payUrl())}"><span>${U.esc(Plan.NAMES[Plan.state().plan])}</span><span class="v">${U.esc(Plan.summary().split(' · ').slice(1).join(' · ') || '결제하기')}${Icon.svg('chevron', 16)}</span></a></section>
-        <section class="group sizes"><h2>글자 크기</h2>
-          <div class="size-pick">${Object.entries(this.SIZES).map(([k, [l]]) => `<button class="sz-${k}" data-size="${k}" aria-pressed="${this.size() === k}">${l}</button>`).join('')}</div>
-          <p>일정표 · 버튼 · 비서톡 글자가 함께 커져요</p></section>
-        <p class="me-foot">${Store.mode === 'demo' ? '<button data-reset>데모 데이터 처음으로</button>' : '<button data-logout>로그아웃</button>'} · <a href="privacy.html" target="_blank">개인정보 처리방침</a> · 버전 0.3</p>
+          ${row('data-edit="contacts"', '연락처 고치기', '')}</div></section>
+        <section class="group"><h2>알림 · 화면</h2><div class="box">
+          ${notifRow}
+          ${row('data-edit="prep"', '아침 준비 시간', U.durLabel(p.prepMin || 60))}
+          ${row('data-edit="name"', '이름', p.name || '')}
+          ${sizes}</div></section>
+        <section class="group"><h2>구독</h2><div class="box">
+          <a class="set-row" href="${U.esc(Plan.payUrl())}"><span class="l">${U.esc(Plan.NAMES[ps.plan])}<small>${U.esc(Plan.summary())}</small></span><span class="v strong">${ps.plan === 'trial' || ps.plan === 'expired' ? '결제' : '연장'}${Icon.svg('chevron', 16)}</span></a></div></section>
+        <p class="me-foot">${Store.mode === 'demo' ? '<button data-reset>데모 데이터 처음으로</button>' : '<button data-logout>로그아웃</button>'} · <a href="privacy.html" target="_blank">개인정보 처리방침</a> · 버전 0.4</p>
       </div>`;
   },
 
@@ -354,26 +366,31 @@ const App = {
       return m;
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const m = this.modal(`<div class="ai">
-      <div class="ai-head"><span class="ico">${Icon.svg('mic', 20)}</span><div><h3>AI 비서</h3><p>말하거나 적으면 일정을 바꿔 드려요 · 데모라 정해진 말투만 알아들어요</p></div><button class="sq" data-close aria-label="닫기">${Icon.svg('x', 18)}</button></div>
-      <div class="ai-log" id="aiLog"><div class="ai-msg bot">무엇을 도와드릴까요? 바꾸기 전에 꼭 한 번 여쭤볼게요.</div></div>
-      <div class="ai-ex">${Assistant.EXAMPLES.map(e => `<button type="button" data-ex="${U.esc(e)}">${U.esc(e)}</button>`).join('')}</div>
-      <form id="aiForm" class="ai-form">
-        ${SR ? `<button type="button" class="sq mic" data-mic aria-label="말로 하기">${Icon.svg('mic', 20)}</button>` : ''}
-        <input name="q" placeholder="예: 점심 30분 미뤄 줘" autocomplete="off" aria-label="AI 비서에게 말하기">
-        <button class="btn primary" aria-label="보내기">${Icon.svg('send', 18)}</button>
-      </form></div>`);
-    m.querySelector('.modal').classList.add('ai-modal');
-    const log = m.querySelector('#aiLog');
-    const f = m.querySelector('#aiForm');
-    const add = (cls, html) => { log.insertAdjacentHTML('beforeend', `<div class="ai-msg ${cls}">${html}</div>`); log.scrollTop = log.scrollHeight; return log.lastElementChild; };
+    const back = document.createElement('div');
+    back.className = 'voice-back';
+    back.innerHTML = `<div class="voice" role="dialog" aria-label="AI 비서">
+      <div class="v-head"><span class="v-state"><i></i><span id="vState">${SR ? '듣고 있어요' : '적어 주시면 일정을 바꿔 드려요'}</span></span>
+        <button class="v-close" data-close aria-label="닫기">${Icon.svg('x', 20)}</button></div>
+      <div class="v-log" id="aiLog"><p class="v-bot">무엇을 도와드릴까요? 바꾸기 전에 꼭 한 번 여쭤볼게요.${Store.mode === 'demo' ? '<br><small>데모라 정해진 말투만 알아들어요</small>' : ''}</p></div>
+      <div class="v-bottom">
+        <div class="v-ex">${Assistant.EXAMPLES.map(e => `<button type="button" data-ex="${U.esc(e)}">${U.esc(e)}</button>`).join('')}</div>
+        <form id="aiForm" class="v-type" ${SR ? 'hidden' : ''}><input name="q" placeholder="예: 점심 30분 미뤄 줘" autocomplete="off" aria-label="AI 비서에게 적기"><button aria-label="보내기">${Icon.svg('send', 18)}</button></form>
+        ${SR ? `<button type="button" class="v-mic" data-mic aria-label="말하기">${Icon.svg('mic', 34)}</button>
+        <p class="v-hint">말이 끝나면 저절로 멈춰요 · <button type="button" data-typing>글로 쓰기</button></p>` : ''}
+      </div></div>`;
+    back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-close]')) { try { rec && rec.abort(); } catch { /* */ } back.remove(); } });
+    document.body.appendChild(back);
+    const log = back.querySelector('#aiLog');
+    const f = back.querySelector('#aiForm');
+    const state = back.querySelector('#vState');
+    const add = (cls, html) => { log.insertAdjacentHTML('beforeend', `<div class="${cls}">${html}</div>`); log.scrollTop = log.scrollHeight; return log.lastElementChild; };
     const ask = text => {
       if (!text.trim()) return;
-      add('me', U.esc(text));
+      add('v-said', `“${U.esc(text)}”`);
       const r = Assistant.interpret(text, { schedules: Store.list(), now: new Date(), profile: this.profile() });
-      if (r.kind !== 'action') return add('bot', U.esc(r.say));
-      const card = add('bot card', `<b>${U.esc(r.say)}</b><ul>${r.lines.map(l => `<li class="${l.startsWith('주의') ? 'warn' : ''}">${U.esc(l)}</li>`).join('')}</ul>
-        <div class="ai-do"><button class="btn" data-no>아니요</button><button class="btn primary" data-yes>이대로 할게요</button></div>`);
+      if (r.kind !== 'action') return add('v-bot', U.esc(r.say));
+      const card = add('v-card', `<span class="k">이렇게 바꿀까요?</span><b>${U.esc(r.say)}</b><ul>${r.lines.map(l => `<li class="${l.startsWith('주의') ? 'warn' : ''}">${U.esc(l)}</li>`).join('')}</ul>
+        <div class="ai-do"><button class="btn" data-no>취소</button><button class="btn primary" data-yes>이대로 바꾸기</button></div>`);
       card.querySelector('[data-no]').addEventListener('click', () => { card.querySelector('.ai-do').innerHTML = '<span class="muted small">취소했어요</span>'; });
       card.querySelector('[data-yes]').addEventListener('click', async () => {
         try {
@@ -381,24 +398,29 @@ const App = {
           if (r.notify) await Store.send(r.notify.body, { ref: r.notify.ref });
           card.querySelector('.ai-do').innerHTML = `<span class="ok">${Icon.svg('check', 15)} ${r.changes.length ? '바꿨어요. ' : ''}비서에게 알렸어요</span>`;
           if (r.draft) {
-            const d = add('bot draft', `<b>상대방에게 보낼 문자 초안</b><p>${U.esc(r.draft)}</p><button class="btn" data-copy>복사</button>`);
+            const d = add('v-card draft', `<span class="k">상대방에게 보낼 문자 초안</span><p>${U.esc(r.draft)}</p><button class="btn" data-copy>복사</button>`);
             d.querySelector('[data-copy]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(r.draft); U.toast('복사했어요'); } catch { U.toast('복사하지 못했어요. 길게 눌러 복사해 주세요'); } });
           }
         } catch (err) { U.toast('바꾸지 못했어요: ' + (err.message || err)); }
       });
     };
     f.addEventListener('submit', e => { e.preventDefault(); const v = f.q.value; f.q.value = ''; ask(v); });
-    m.querySelectorAll('[data-ex]').forEach(b => b.addEventListener('click', () => ask(b.dataset.ex)));
-    const mic = m.querySelector('[data-mic]');
-    if (mic) mic.addEventListener('click', () => {
-      const rec = new SR(); rec.lang = 'ko-KR'; rec.interimResults = false;
-      mic.classList.add('on'); f.q.placeholder = '듣고 있어요…';
-      rec.onresult = e => { const said = e.results[0][0].transcript; ask(said); };
-      rec.onerror = () => U.toast('잘 못 들었어요. 다시 말씀하거나 적어 주세요');
-      rec.onend = () => { mic.classList.remove('on'); f.q.placeholder = '예: 점심 30분 미뤄 줘'; };
-      rec.start();
-    });
-    f.q.focus();
+    back.querySelectorAll('[data-ex]').forEach(b => b.addEventListener('click', () => ask(b.dataset.ex)));
+    back.querySelector('[data-typing]')?.addEventListener('click', () => { f.hidden = false; f.q.focus(); });
+    const mic = back.querySelector('[data-mic]');
+    let rec = null;
+    const listen = () => {
+      try {
+        rec = new SR(); rec.lang = 'ko-KR'; rec.interimResults = false;
+        mic.classList.add('on'); state.textContent = '듣고 있어요';
+        rec.onresult = e => ask(e.results[0][0].transcript);
+        rec.onerror = () => { state.textContent = '잘 못 들었어요. 다시 눌러 말씀해 주세요'; };
+        rec.onend = () => { mic.classList.remove('on'); if (state.textContent === '듣고 있어요') state.textContent = '마이크를 눌러 말씀해 주세요'; };
+        rec.start();
+      } catch { state.textContent = '마이크를 쓸 수 없어요. 글로 적어 주세요'; f.hidden = false; }
+    };
+    if (mic) { mic.addEventListener('click', listen); listen(); }
+    else f.q.focus();
   },
 
   async askNotif() {
@@ -433,6 +455,8 @@ const App = {
     // 긴급은 한 번 누르면 바로 전송 (입력창 없이)
     on('[data-urgent]', safe(async () => { await Store.send('지금 바로 연락 주세요', { urgent: true }); U.toast('긴급 요청을 보냈어요'); }));
     on('[data-notif]', () => this.askNotif());
+    on('[data-bell]', () => { if (['granted', 'unsupported'].includes(this.notifState())) this.go('me'); else this.askNotif(); });
+    on('[data-exitdemo]', () => Store.exitDemo());
     on('[data-tabgo]', el => this.go(el.dataset.tabgo));
     on('[data-edit]', el => { if (el.dataset.edit === 'notif') return U.toast('알림을 끄려면 브라우저 설정에서 바꿔 주세요'); this.editProfile(el.dataset.edit); });
     on('[data-size]', el => { localStorage.setItem('CEOP_FONT', el.dataset.size); this.applySize(); this.render(); });

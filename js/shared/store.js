@@ -21,7 +21,9 @@ const Store = {
   async init(role) {
     this.role = role;
     const cfg = window.CEOP_CONFIG || {};
-    if (cfg.SUPABASE_URL && cfg.SUPABASE_KEY && window.supabase) {
+    let forced = false; try { forced = localStorage.getItem('CEOP_DEMO') === '1'; } catch { /* 저장소 막힘 */ }
+    this.forcedDemo = forced;
+    if (!forced && cfg.SUPABASE_URL && cfg.SUPABASE_KEY && window.supabase) {
       this.mode = 'supabase';
       this.client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_KEY);
       const { data } = await this.client.auth.getSession();
@@ -229,6 +231,10 @@ const Store = {
     this._saveDemo();
     return { ok: true };
   },
+
+  /** 로그인 화면의 '데모 둘러보기' — 서버가 연결돼 있어도 이 기기에서만 데모로 */
+  enterDemo() { try { localStorage.setItem('CEOP_DEMO', '1'); } catch { /* */ } location.reload(); },
+  exitDemo() { try { localStorage.removeItem('CEOP_DEMO'); } catch { /* */ } location.reload(); },
 
   resetDemo() { localStorage.removeItem(this.KEY); this._loadDemo(); this._emit(); },
 
