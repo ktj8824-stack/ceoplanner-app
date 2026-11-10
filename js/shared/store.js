@@ -63,28 +63,42 @@ const Store = {
   /** 데모 전용: 회사 구독 정보 바꾸기 */
   demoSetCompany(patch) { this.data.company = { ...this.company(), ...patch }; this._saveDemo(); },
 
-  /** 결제: action 'pay_prepare' | 'pay_confirm'. 데모에서는 서버 없이 바로 반영 */
+  /** 결제: action 'pay_quote' | 'pay_prepare' | 'pay_confirm' | 'pay_schedule'. 데모에서는 서버 없이 바로 반영 (계산은 Plan.quote — 서버와 같은 규칙) */
   async billing(action, payload = {}) {
     if (this.mode === 'supabase') {
       const r = await this._account({ action, ...payload });
-      if (action === 'pay_confirm') { await this._reload(); this._emit(); }
+      if (action === 'pay_confirm' || action === 'pay_schedule') { await this._reload(); this._emit(); }
       return r;
     }
     const execs = Number(payload.extraExecs || 0);
-    if (action === 'pay_prepare') {
+    const c = this.company(), now = new Date();
+    if (action === 'pay_quote' || action === 'pay_prepare') {
       if (!['basic', 'premium'].includes(payload.plan)) throw new Error('요금제를 다시 골라 주세요.');
-      const c = Plan.charge(payload.plan, execs);
-      return { orderId: 'DEMO-' + Date.now(), amount: c.total, supply: c.supply, vat: c.vat, orderName: `CEO플래너 ${Plan.NAMES[payload.plan]}${execs ? ` + 임원 ${execs}명` : ''} (1개월)`, mode: 'demo' };
+      const q = Plan.quote(c, payload.plan, execs, now);
+      if (action === 'pay_quote') return q;
+      if (q.kind === 'reduce') throw new Error('줄일 때는 결제하지 않아요. "다음 결제일부터 바꾸기"를 눌러 주세요.');
+      const k = new Date(now.getTime() + 9 * 3600000).toISOString().slice(0, 10).replace(/-/g, '');
+      const orderId = `CEO-${k}-DEMO${String(Date.now()).slice(-2)}`;
+      this._demoOrders = { ...(this._demoOrders || {}), [orderId]: q };
+      return { orderId, ...q, mode: 'demo' };
+    }
+    if (action === 'pay_schedule') {
+      const q = Plan.quote(c, payload.plan, execs, now);
+      const same = c.plan === payload.plan && (c.extraExecs || 0) === execs;
+      if (q.kind !== 'reduce' && !same) throw new Error('늘릴 때는 결제가 필요해요.');
+      this.data.company = { ...c, nextPlan: same ? null : payload.plan, nextExtraExecs: same ? null : execs };
+      this._saveDemo(); this._emit();
+      return { nextPlan: this.data.company.nextPlan, nextExtraExecs: this.data.company.nextExtraExecs, nextBillAt: c.paidUntil, monthly: q.monthly };
     }
     if (action === 'pay_confirm') {
-      const c = this.company(), now = new Date();
-      const start = c.paidUntil && new Date(c.paidUntil) > now ? new Date(c.paidUntil) : now;
-      const end = new Date(start); end.setMonth(end.getMonth() + 1);
-      this.data.company = { ...c, plan: payload.plan, extraExecs: execs, paidUntil: end.toISOString() };
-      const vat = Plan.charge(payload.plan, execs).vat;
-      this.data.payments = [{ orderId: payload.orderId, plan: payload.plan, extraExecs: execs, amount: payload.amount, vat, status: 'DONE', method: '데모 결제', approvedAt: now.toISOString(), periodEnd: end.toISOString(), mode: 'demo' }, ...this.payments()].slice(0, 12);
+      const q = (this._demoOrders || {})[payload.orderId] || Plan.quote(c, payload.plan, execs, now);
+      let end;
+      if (q.kind === 'prorate') end = new Date(c.paidUntil);
+      else { const start = c.paidUntil && new Date(c.paidUntil) > now ? new Date(c.paidUntil) : now; end = new Date(start); end.setMonth(end.getMonth() + 1); }
+      this.data.company = { ...c, plan: q.plan, extraExecs: q.extraExecs, paidUntil: end.toISOString(), nextPlan: null, nextExtraExecs: null };
+      this.data.payments = [{ orderId: payload.orderId, kind: q.kind, plan: q.plan, extraExecs: q.extraExecs, amount: q.amount, vat: q.vat, status: 'DONE', method: '데모 결제', approvedAt: now.toISOString(), periodEnd: end.toISOString(), mode: 'demo' }, ...this.payments()].slice(0, 12);
       this._saveDemo();
-      return { status: 'DONE', orderId: payload.orderId, plan: payload.plan, amount: payload.amount, vat, method: '데모 결제', periodEnd: end.toISOString(), mode: 'demo' };
+      return { status: 'DONE', orderId: payload.orderId, kind: q.kind, plan: q.plan, extraExecs: q.extraExecs, amount: q.amount, vat: q.vat, method: '데모 결제', periodEnd: end.toISOString(), mode: 'demo' };
     }
     throw new Error('알 수 없는 결제 요청이에요.');
   },
@@ -277,16 +291,16 @@ const Store = {
       this.client.from('ceo_messages').select('*').eq('ceo_id', this.ceoId).order('created_at', { ascending: true }).limit(300),
       this.client.from('ceo_profiles').select('name, settings').eq('id', this.ceoId).single(),
       this.companyId ? this.client.from('ceo_profiles').select('login_id, name, role, phone').eq('company_id', this.companyId) : Promise.resolve({ data: [] }),
-      this.companyId ? this.client.from('ceo_companies').select('plan, trial_until, paid_until, extra_execs').eq('id', this.companyId).maybeSingle() : Promise.resolve({ data: null }),
-      this.companyId ? this.client.from('ceo_payments').select('order_id, plan, extra_execs, amount, vat_amount, status, method, approved_at, period_end, mode, created_at').eq('company_id', this.companyId).neq('status', 'READY').order('created_at', { ascending: false }).limit(12) : Promise.resolve({ data: [] }),
+      this.companyId ? this.client.from('ceo_companies').select('plan, trial_until, paid_until, extra_execs, next_plan, next_extra_execs').eq('id', this.companyId).maybeSingle() : Promise.resolve({ data: null }),
+      this.companyId ? this.client.from('ceo_payments').select('order_id, plan, kind, extra_execs, amount, vat_amount, status, method, approved_at, period_end, mode, created_at').eq('company_id', this.companyId).neq('status', 'READY').order('created_at', { ascending: false }).limit(12) : Promise.resolve({ data: [] }),
     ]);
     if (sch.error) throw sch.error;
     if (msg.error) throw msg.error;
     this.data = {
       profile: { name: prof.data?.name, ...(prof.data?.settings || {}) },
       schedules: (sch.data || []).map(r => this._fromRow(r)),
-      company: co && co.data ? { plan: co.data.plan, trialUntil: co.data.trial_until, paidUntil: co.data.paid_until, extraExecs: co.data.extra_execs || 0 } : null,
-      payments: ((pay && pay.data) || []).map(r => ({ orderId: r.order_id, plan: r.plan, extraExecs: r.extra_execs, amount: r.amount, vat: r.vat_amount, status: r.status, method: r.method, approvedAt: r.approved_at, periodEnd: r.period_end, mode: r.mode })),
+      company: co && co.data ? { plan: co.data.plan, trialUntil: co.data.trial_until, paidUntil: co.data.paid_until, extraExecs: co.data.extra_execs || 0, nextPlan: co.data.next_plan || null, nextExtraExecs: co.data.next_extra_execs ?? null } : null,
+      payments: ((pay && pay.data) || []).map(r => ({ orderId: r.order_id, kind: r.kind || 'month', plan: r.plan, extraExecs: r.extra_execs, amount: r.amount, vat: r.vat_amount, status: r.status, method: r.method, approvedAt: r.approved_at, periodEnd: r.period_end, mode: r.mode })),
       members: (mem.data || []).map(r => ({ loginId: r.login_id, name: r.name, role: r.role, phone: r.phone || '' })),
       messages: (msg.data || []).map(r => ({ id: r.id, from: r.sender_role, body: r.body, urgent: r.urgent, ref: r.ref_id, at: r.created_at })),
     };

@@ -1,7 +1,8 @@
 /* CEO플래너 — 구독 요금제 (화면용). 로드플래너 plan.js 와 같은 역할.
    - 가격 · 상태 규칙은 서버(supabase/functions/ceo-account/billing.js)와 같아요. 실제 금액은 서버가 정해요.
    - 무료 체험(가입 후 14일, AI 포함) → 기본(AI 없음) / AI 비서 포함 중 골라 월 결제
-   - 결제 1번 = 1개월. 끝나기 전에 또 결제하면 끝나는 날 뒤로 1개월 이어 붙어요.
+   - 매달 자동결제 기준 (자동결제 연결 전에는 결제 1번 = 1개월). 같은 요금제로 또 결제하면 끝나는 날 뒤로 1개월
+   - 이용 중 늘리기는 일할 결제(결제일 그대로), 줄이기는 다음 결제일부터 (예약)
    - 막는 곳: AI 비서(기본 요금제 · 기간 끝) · 기간이 끝나면 앱 · 웹 전체에 결제 안내 (데이터는 그대로 보관) */
 const Plan = {
   // 가격은 모두 부가세 별도(VAT 별도)예요. 결제 금액 = 가격 + 부가세 10% (B2B 관행, 세금계산서 기준)
@@ -32,6 +33,32 @@ const Plan = {
     const vat = Math.round(supply * this.VAT_RATE);
     return { supply, vat, total: supply + vat };
   },
+  /** 견적 — 서버 billing.js companyQuote 와 같은 규칙 (화면 미리보기 · 데모용, 실제 금액은 서버가 정함)
+   *  kind 'month'(한 달) · 'prorate'(이용 중 늘리기: 오늘 일할, 결제일 그대로) · 'reduce'(이용 중 줄이기: 다음 결제일부터) */
+  quote(c, plan, execs = 0, now = new Date()) {
+    const RANK = { basic: 0, premium: 1 };
+    const m = this.charge(plan, execs), monthly = { supply: m.supply, vat: m.vat, amount: m.total };
+    const base = { plan, extraExecs: execs, supply: m.supply, vat: m.vat, amount: m.total, monthly,
+      orderName: `CEO플래너 ${this.NAMES[plan]}${execs ? ` + 임원 ${execs}명` : ''} (월 정기)` };
+    const paid = c && c.paidUntil && new Date(c.paidUntil) > now && RANK[c.plan] !== undefined;
+    const addM = (d) => { const x = new Date(d); const day = x.getUTCDate(); x.setUTCMonth(x.getUTCMonth() + 1); if (x.getUTCDate() < day) x.setUTCDate(0); return x.toISOString(); };
+    if (!paid) return { kind: 'month', ...base, nextBillAt: addM(now) };
+    const cur = c.extraExecs || 0;
+    const up = RANK[plan] > RANK[c.plan] || execs > cur, down = RANK[plan] < RANK[c.plan] || execs < cur;
+    if (up && down) return { kind: 'mixed', ...base, amount: 0 };
+    if (down) return { kind: 'reduce', ...base, supply: 0, vat: 0, amount: 0, nextBillAt: c.paidUntil };
+    if (up) {
+      const end = new Date(c.paidUntil), start = new Date(c.paidUntil);
+      const day = start.getUTCDate(); start.setUTCMonth(start.getUTCMonth() - 1); if (start.getUTCDate() < day) start.setUTCDate(0);
+      const cycleDays = Math.round((end - start) / 86400000);
+      const daysLeft = Math.min(cycleDays, Math.max(1, Math.ceil((end - now) / 86400000)));
+      const diff = m.supply - this.charge(c.plan, cur).supply;
+      const supply = Math.floor(diff * daysLeft / cycleDays / 10) * 10, vat = Math.round(supply * this.VAT_RATE);
+      return { kind: 'prorate', ...base, supply, vat, amount: supply + vat, daysLeft, cycleDays, nextBillAt: c.paidUntil };
+    }
+    return { kind: 'month', ...base, nextBillAt: addM(c.paidUntil) };
+  },
+  md(iso) { const d = new Date(iso); return `${d.getMonth() + 1}월 ${d.getDate()}일`; },
   untilText(iso) {
     if (!iso) return '';
     const d = new Date(iso);

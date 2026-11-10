@@ -47,6 +47,17 @@
     .hist h2 { font-size: 15px; margin: 0 0 8px; }
     .hist li { display: flex; justify-content: space-between; font-size: 13.5px; padding: 6px 0; border-top: 1px solid var(--line); }
     .hist ul { list-style: none; margin: 0; padding: 0; }
+    .total .big { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+    .total .big b { font-size: 15px; } .total .big strong { font-size: 24px; letter-spacing: -.5px; color: var(--navy); }
+    .box { border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.55; }
+    .box.info { background: var(--brass-soft); color: var(--ink); }
+    .box.warn { background: var(--signal-soft); color: var(--signal); font-weight: 600; }
+    .pending { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 8px; }
+    .agree { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px; cursor: pointer; font-size: 14px; font-weight: 600; line-height: 1.5; }
+    .agree input { width: 22px; height: 22px; flex-shrink: 0; accent-color: var(--navy); margin-top: 1px; }
+    .agree small { display: block; color: var(--slate); font-weight: 500; font-size: 12.5px; }
+    #payBtn { padding: 15px; font-size: 16px; font-weight: 800; border-radius: 14px; }
+    .result .ord { font-family: ui-monospace, monospace; letter-spacing: .3px; }
     @media (max-width: 420px) { .plans { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -91,50 +102,107 @@
 
     // ───────── 1) 요금제 고르기 ─────────
     choose() {
-      const s = Plan.state(), P = Plan.PRICES;
-      if (s.plan === 'basic') this.plan = 'basic';
+      const s = Plan.state(), P = Plan.PRICES, c = Store.company() || {};
+      // 이용 중이면 지금 요금제 · 임원 수에서 시작 (그대로 두면 다음 달 미리 결제)
+      if (s.plan === 'basic' || s.plan === 'premium') { this.plan = s.plan; this.execs = c.extraExecs || 0; }
       const card = (k, tag) => `<button type="button" class="plan" role="radio" data-plan="${k}" aria-checked="${this.plan === k}">
           ${tag ? `<span class="tag">${tag}</span>` : ''}
           <span class="nm">${Plan.NAMES[k]}</span>
           <span class="pr">${Plan.won(P[k])}<small> / 월 · VAT 별도</small></span>
           <ul>${Plan.FEATURES[k].map(f => `<li>${U.esc(f)}</li>`).join('')}</ul></button>`;
       const hist = Store.payments().filter(p => p.status === 'DONE').slice(0, 5);
+      const pend = s.active && s.plan !== 'trial' && (c.nextPlan || c.nextExtraExecs != null)
+        ? { plan: c.nextPlan || c.plan, execs: c.nextExtraExecs != null ? c.nextExtraExecs : (c.extraExecs || 0) } : null;
+      const canPay = ['ceo', 'secretary'].includes(Store.role) || Store.mode === 'demo';
       document.getElementById('root').innerHTML = `
         <div class="pay-head"><a href="${U.esc(this.backUrl)}">← ${this.backLabel}</a></div>
         <div class="pay-head"><h1>구독 결제</h1></div>
-        <div class="now card"><span><small>지금</small><b>${U.esc(Plan.summary())}</b></span>
-          <span class="muted small">${s.active && s.plan !== 'trial' ? '결제하면 끝나는 날 뒤로 1개월 이어져요' : '결제한 날부터 1개월'}</span></div>
+        <div class="now card"><span><small>지금</small><b>${U.esc(Plan.summary())}</b>
+          ${s.active && s.plan !== 'trial' ? `<small>다음 결제일 ${Plan.md(s.until)} · 매달 ${Plan.won(Plan.charge(c.plan, c.extraExecs || 0).total)}</small>` : ''}
+          ${pend ? `<div class="pending"><span class="box info">${Plan.md(s.until)}부터 ${U.esc(Plan.NAMES[pend.plan])}${pend.execs ? ` + 임원 ${pend.execs}명` : ''} · 매달 ${Plan.won(Plan.charge(pend.plan, pend.execs).total)}으로 바뀌어요 (예약됨)</span>
+            <button class="btn" type="button" id="cancelPend">예약 취소</button></div>` : ''}
+          </span></div>
         <div class="plans" role="radiogroup" aria-label="요금제">${card('basic')}${card('premium', '추천')}</div>
         <div class="execs card"><span class="t"><b>추가 임원</b><small>대표님 외에 같은 회사 임원 1명당 월 ${Plan.won(P.perExec)}(VAT 별도) · 비서 · 기사 계정은 무료</small></span>
           <span class="step"><button type="button" data-ex="-1" aria-label="임원 줄이기">−</button><output id="exN">${this.execs}</output><button type="button" data-ex="1" aria-label="임원 늘리기">+</button></span></div>
         <div class="total card" id="total"></div>
-        ${Store.mode === 'demo' ? '<p class="demo-note">데모 모드예요. 실제 결제창 없이 바로 반영돼요.</p>' : '<div id="payment-method"></div><div id="agreement"></div>'}
+        <div id="payArea">
+          ${Store.mode === 'demo' ? '<p class="demo-note">데모 모드예요. 실제 결제창 없이 바로 반영돼요.</p>' : '<div id="payment-method"></div><div id="agreement"></div>'}
+        </div>
+        <label class="agree card" id="agreeRow"><input type="checkbox" id="agree"><span><span id="agreeT"></span><small id="agreeS"></small></span></label>
         <p class="err" id="payErr" role="alert"></p>
-        <button class="btn primary" id="payBtn" type="button"></button>
-        <p class="note">· 결제 1번에 1개월 이용이에요. 자동으로 다시 결제되지 않아요. 끝나기 전에 알려 드려요.<br>
-          · 요금제를 바꾸면 결제한 날부터 새 요금제가 적용돼요. · 금액은 서버에서 다시 확인해요.<br>
-          · 세금계산서 · 환불 문의는 고객센터로 연락해 주세요.</p>
-        ${hist.length ? `<div class="hist card"><h2>최근 결제</h2><ul>${hist.map(h => `<li><span>${Plan.untilText(h.approvedAt)} · ${Plan.NAMES[h.plan]}${h.extraExecs ? ` + 임원 ${h.extraExecs}` : ''}</span><b>${Plan.won(h.amount)}</b></li>`).join('')}</ul></div>` : ''}`;
+        <button class="btn primary" id="payBtn" type="button" ${canPay ? '' : 'disabled'}></button>
+        <p class="note">· 카드로 결제하면 카드 매출전표가 세금 증빙이 돼요. 세금계산서가 꼭 필요하면 고객센터로 연락해 주세요.<br>
+          · 이용 중에 늘리면 늘린 만큼만 다음 결제일까지 일할로 결제하고, 줄이면 다음 결제일부터 적용돼요.<br>
+          · 언제든 해지할 수 있고, 해지해도 결제한 기간까지는 계속 쓸 수 있어요. · 금액은 서버에서 다시 확인해요.</p>
+        ${hist.length ? `<div class="hist card"><h2>결제 내역</h2><ul>${hist.map(h => `<li><span>${Plan.untilText(h.approvedAt)} · ${Plan.NAMES[h.plan]}${h.extraExecs ? ` + 임원 ${h.extraExecs}` : ''}${h.kind === 'prorate' ? ' (일할)' : ''}<br><small class="muted">${U.esc(h.orderId || '')}</small></span><b>${Plan.won(h.amount)}</b></li>`).join('')}</ul></div>` : ''}`;
       const root = document.getElementById('root');
       root.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () => { this.plan = b.dataset.plan; root.querySelectorAll('[data-plan]').forEach(x => x.setAttribute('aria-checked', x === b)); this.update(); }));
       root.querySelectorAll('[data-ex]').forEach(b => b.addEventListener('click', () => { this.execs = Math.min(P.maxExec, Math.max(0, this.execs + Number(b.dataset.ex))); root.querySelector('#exN').textContent = this.execs; this.update(); }));
       root.querySelector('#payBtn').addEventListener('click', () => this.pay());
+      root.querySelector('#agree').addEventListener('change', () => this.syncBtn());
+      root.querySelector('#cancelPend')?.addEventListener('click', () => this.schedule(c.plan, c.extraExecs || 0, true));
       this.update();
       if (Store.mode === 'supabase') this.initToss();
     },
-    amount() { return Plan.charge(this.plan, this.execs).total; },
+    quote() { return Plan.quote(Store.company(), this.plan, this.execs); },
+    /** 이용 중에 지금과 같은 요금제를 고른 경우 (= 다음 달 미리 결제) */
+    renew(q) { const s = Plan.state(); return q.kind === 'month' && s.active && s.plan !== 'trial'; },
+    amount() { return this.quote().amount; },
     update() {
-      const P = Plan.PRICES, c = Plan.charge(this.plan, this.execs), a = c.total;
-      document.getElementById('total').innerHTML = `
-        <div class="row"><span>${Plan.NAMES[this.plan]}</span><span>${Plan.won(P[this.plan])}</span></div>
-        ${this.execs ? `<div class="row"><span>추가 임원 ${this.execs}명</span><span>${Plan.won(P.perExec * this.execs)}</span></div>` : ''}
-        <div class="row"><span>부가세 (10%)</span><span>${Plan.won(c.vat)}</span></div>
-        <div class="row sum"><span>1개월 결제 금액</span><span>${Plan.won(a)}</span></div>
-        <div class="row vat"><span>공급가 ${Plan.won(c.supply)} + 부가세 ${Plan.won(c.vat)}</span><span>세금계산서 발행 가능</span></div>`;
-      document.getElementById('payBtn').textContent = `${Plan.won(a)} 결제하기`;
-      if (this.widgets) this.widgets.setAmount({ currency: 'KRW', value: a }).catch(() => {});
+      const P = Plan.PRICES, q = this.quote(), m = q.monthly, w = Plan.won;
+      this.q_ = q;
+      const day = q.nextBillAt ? new Date(q.nextBillAt).getDate() : new Date().getDate();
+      let html;
+      if (q.kind === 'prorate') {
+        const c = Store.company();
+        const what = [this.plan !== c.plan ? `${Plan.NAMES[c.plan]} → ${Plan.NAMES[this.plan]}` : '', this.execs > (c.extraExecs || 0) ? `임원 ${this.execs - (c.extraExecs || 0)}명 추가` : ''].filter(Boolean).join(' · ');
+        html = `<div class="row"><span>바꾸는 내용</span><span>${U.esc(what)}</span></div>
+          <div class="row"><span>다음 결제일(${Plan.md(q.nextBillAt)})까지</span><span>${q.daysLeft}일 / ${q.cycleDays}일 일할</span></div>
+          <div class="row"><span>공급가</span><span>${w(q.supply)}</span></div>
+          <div class="row"><span>부가세 (10%)</span><span>${w(q.vat)}</span></div>
+          <div class="big"><b>오늘 결제 금액</b><strong>${w(q.amount)}</strong></div>
+          <div class="box info">${Plan.md(q.nextBillAt)}부터는 ${U.esc(Plan.NAMES[this.plan])}${this.execs ? ` + 임원 ${this.execs}명` : ''} · <b>매달 ${w(m.amount)}</b>(부가세 포함) 자동결제돼요. 결제일은 그대로예요.</div>`;
+      } else if (q.kind === 'reduce') {
+        html = `<div class="row"><span>${U.esc(Plan.NAMES[this.plan])}${this.execs ? ` + 임원 ${this.execs}명` : ''}</span><span>${w(m.supply)}</span></div>
+          <div class="row"><span>부가세 (10%)</span><span>${w(m.vat)}</span></div>
+          <div class="big"><b>다음 결제일부터 매달</b><strong>${w(m.amount)}</strong></div>
+          <div class="box info"><b>오늘 결제는 없어요.</b> ${Plan.md(q.nextBillAt)}까지는 지금 요금제를 그대로 쓰고, ${Plan.md(q.nextBillAt)}부터 바뀌어요.</div>`;
+      } else if (q.kind === 'mixed') {
+        html = `<div class="box warn">늘리기와 줄이기는 한 번에 하나씩 해 주세요. 예: 임원을 먼저 줄이기 예약하고, 요금제는 따로 바꾸기</div>`;
+      } else {
+        html = `<div class="row"><span>${Plan.NAMES[this.plan]}</span><span>${w(P[this.plan])}</span></div>
+          ${this.execs ? `<div class="row"><span>추가 임원 ${this.execs}명</span><span>${w(P.perExec * this.execs)}</span></div>` : ''}
+          <div class="row vat"><span>공급가 ${w(q.supply)}</span><span>부가세 10% ${w(q.vat)}</span></div>
+          <div class="big"><b>${this.renew(q) ? '다음 달 미리 결제' : '매달 결제 금액'}</b><strong>${w(q.amount)}</strong></div>
+          ${this.renew(q) ? `<div class="box info">지금 요금제 그대로 다음 달(${Plan.md(Store.company().paidUntil)}~${Plan.md(q.nextBillAt)})을 미리 결제해요. 보통은 결제일에 자동으로 결제돼요.</div>` : ''}`;
+      }
+      document.getElementById('total').innerHTML = html;
+      const paying = q.kind === 'month' || q.kind === 'prorate';
+      document.getElementById('payArea').style.display = paying ? '' : 'none';
+      document.getElementById('agreeRow').style.display = paying ? '' : 'none';
+      document.getElementById('agreeT').textContent = q.kind === 'prorate'
+        ? `오늘 ${w(q.amount)}을 결제하고, ${Plan.md(q.nextBillAt)}부터 매달 ${w(m.amount)} 자동결제에 동의해요`
+        : `매달 ${day}일 ${w(q.amount)} 자동결제에 동의해요`;
+      document.getElementById('agreeS').textContent = '언제든 해지할 수 있고, 해지해도 결제한 기간까지는 계속 쓸 수 있어요.';
+      this.syncBtn();
+      if (this.widgets && paying) this.widgets.setAmount({ currency: 'KRW', value: q.amount }).catch(() => {});
     },
-
+    syncBtn() {
+      const q = this.q_ || this.quote(), btn = document.getElementById('payBtn'), w = Plan.won;
+      if (btn.dataset.busy) return;
+      const canPay = ['ceo', 'secretary'].includes(Store.role) || Store.mode === 'demo';
+      if (q.kind === 'reduce') { btn.textContent = '다음 결제일부터 바꾸기 예약'; btn.disabled = !canPay; return; }
+      if (q.kind === 'mixed') { btn.textContent = '결제하기'; btn.disabled = true; return; }
+      btn.textContent = q.kind === 'prorate' ? `오늘 ${w(q.amount)} 결제하기` : this.renew(q) ? `다음 달 ${w(q.amount)} 미리 결제` : `월 ${w(q.amount)} 정기결제 시작`;
+      btn.disabled = !canPay || !document.getElementById('agree').checked;
+    },
+    // 이용 중 줄이기 예약 / 예약 취소 (결제 없음)
+    async schedule(plan, execs, cancel) {
+      const err = document.getElementById('payErr'); err.textContent = '';
+      try { await Store.billing('pay_schedule', { plan, extraExecs: execs }); this.choose(); }
+      catch (e) { err.textContent = e.message || (cancel ? '예약을 취소하지 못했어요.' : '예약하지 못했어요.'); }
+    },
     async initToss() {
       try {
         if (typeof TossPayments !== 'function') throw new Error('no sdk');
@@ -151,8 +219,11 @@
 
     // ───────── 2~3) 주문 만들고 결제창 ─────────
     async pay() {
+      const q = this.quote();
+      if (q.kind === 'reduce') return this.schedule(this.plan, this.execs);
+      if (!document.getElementById('agree').checked) return;
       const btn = document.getElementById('payBtn'), err = document.getElementById('payErr');
-      err.textContent = ''; btn.disabled = true; btn.textContent = '주문 만드는 중…';
+      err.textContent = ''; btn.dataset.busy = '1'; btn.disabled = true; btn.textContent = '주문 만드는 중…';
       try {
         const order = await Store.billing('pay_prepare', { plan: this.plan, extraExecs: this.execs });
         if (Store.mode === 'demo') {
@@ -169,10 +240,9 @@
         });
       } catch (e) {
         if (e && e.code !== 'USER_CANCEL') err.textContent = e.message || '결제를 시작하지 못했어요.';
-        btn.disabled = false; this.update();
+        delete btn.dataset.busy; this.update();
       }
     },
-
     // ───────── 4) 돌아와서 서버 승인 ─────────
     async confirm() {
       document.getElementById('root').innerHTML = '<div class="card result"><b>결제 확인 중…</b><p class="muted small">창을 닫지 말아 주세요.</p></div>';
@@ -185,25 +255,34 @@
     },
 
     showResult(ok, r, waiting) {
-      const root = document.getElementById('root');
+      const root = document.getElementById('root'), w = Plan.won;
       if (!ok) {
-        root.innerHTML = `<div class="card result bad"><span class="ic">${Icon.svg('alert', 28)}</span><h2 style="margin:0">결제가 완료되지 않았어요</h2>
-          <p class="muted">${U.esc(typeof r === 'string' ? r : '')}</p>
-          <a class="btn primary" href="${U.esc(this.self({}))}">다시 시도</a><a class="btn quiet" href="${U.esc(this.backUrl)}">${this.backLabel}</a></div>`;
+        const code = this.q.get('code');
+        root.innerHTML = `<div class="card result bad"><span class="ic">${Icon.svg('alert', 28)}</span><h2 style="margin:0">결제가 안 됐어요</h2>
+          <p class="muted" style="margin:0">돈은 빠져나가지 않았어요.</p>
+          <div class="box warn" style="text-align:left; width:100%;">이유: ${U.esc(typeof r === 'string' ? r : '')}${code ? ` <small class="muted">(${U.esc(code)})</small>` : ''}</div>
+          <a class="btn primary" href="${U.esc(this.self({}))}" style="width:100%;">다른 카드로 결제하기</a><a class="btn quiet" href="${U.esc(this.backUrl)}">${this.backLabel}</a></div>`;
         return;
       }
       const va = waiting && r.virtualAccount;
+      const c = Store.company() || {};
+      const prorate = r.kind === 'prorate';
+      const next = r.periodEnd || c.paidUntil;
+      const monthly = Plan.charge(r.plan || c.plan, r.extraExecs != null ? r.extraExecs : (c.extraExecs || 0)).total;
       root.innerHTML = `<div class="card result"><span class="ic">${Icon.svg('check', 28)}</span>
-        <h2 style="margin:0">${waiting ? '입금을 기다리고 있어요' : '결제가 완료됐어요'}</h2>
+        <h2 style="margin:0">${waiting ? '입금을 기다리고 있어요' : prorate ? '변경이 적용됐어요' : '결제가 완료됐어요'}</h2>
+        ${prorate ? '<p class="muted" style="margin:0">바뀐 요금제 · 임원은 지금부터 바로 쓸 수 있어요.</p>' : ''}
         <dl>
-          <dt>요금제</dt><dd>${U.esc(Plan.NAMES[r.plan] || '')}</dd>
-          <dt>결제 금액</dt><dd>${Plan.won(r.amount || 0)} <small class="muted">(부가세 ${Plan.won(r.vat != null ? r.vat : Math.round((r.amount || 0) / 11))} 포함)</small></dd>
+          <dt>주문번호</dt><dd class="ord">${U.esc(r.orderId || this.q.get('orderId') || '—')}</dd>
+          <dt>요금제</dt><dd>${U.esc(Plan.NAMES[r.plan] || '')}${r.extraExecs ? ` + 임원 ${r.extraExecs}명` : ''}</dd>
+          <dt>결제 금액</dt><dd>${w(r.amount || 0)} <small class="muted">(${prorate ? '일할 · ' : ''}부가세 ${w(r.vat != null ? r.vat : Math.round((r.amount || 0) / 11))} 포함)</small></dd>
           ${r.method ? `<dt>결제 수단</dt><dd>${U.esc(r.method)}</dd>` : ''}
-          ${r.periodEnd ? `<dt>이용 기간</dt><dd>${Plan.untilText(r.periodEnd)}까지</dd>` : ''}
+          ${next && !waiting ? `<dt>다음 결제일</dt><dd>${Plan.md(next)}부터 매달 ${w(monthly)}</dd>` : ''}
           ${va ? `<dt>입금 계좌</dt><dd>${U.esc(va.bankCode || va.bank || '')} ${U.esc(va.accountNumber || '')}</dd><dt>입금 기한</dt><dd>${U.esc(new Date(va.dueDate).toLocaleString('ko-KR'))}</dd>` : ''}
           ${r.mode === 'test' ? '<dt>참고</dt><dd>테스트 결제라 실제 돈은 나가지 않았어요</dd>' : ''}
         </dl>
-        <a class="btn primary" href="${U.esc(this.backUrl)}">${this.backLabel} 돌아가기</a></div>`;
+        <p class="box info" style="margin:0; text-align:left;">카드 매출전표가 세금 증빙이 돼요. 해지해도 결제한 기간까지는 계속 쓸 수 있어요.</p>
+        <a class="btn primary" href="${U.esc(this.backUrl)}" style="width:100%;">${this.backLabel} 돌아가기</a></div>`;
     },
   };
   Pay.start();
