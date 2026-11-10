@@ -31,6 +31,7 @@
     .step output { min-width: 28px; text-align: center; font-weight: 800; font-size: 17px; }
     .total { padding: 16px; display: grid; gap: 6px; }
     .total .row { display: flex; justify-content: space-between; font-size: 14px; color: var(--ink-2); }
+    .total .vat { font-size: 12.5px; color: var(--slate); }
     .total .sum { font-size: 18px; font-weight: 800; color: var(--ink); border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
     .note { font-size: 12.5px; color: var(--slate); line-height: 1.6; margin: 0; }
     .demo-note { background: #FFF6E5; color: var(--amber); border-radius: 12px; padding: 10px 14px; font-size: 13.5px; }
@@ -95,7 +96,7 @@
       const card = (k, tag) => `<button type="button" class="plan" role="radio" data-plan="${k}" aria-checked="${this.plan === k}">
           ${tag ? `<span class="tag">${tag}</span>` : ''}
           <span class="nm">${Plan.NAMES[k]}</span>
-          <span class="pr">${Plan.won(P[k])}<small> / 월</small></span>
+          <span class="pr">${Plan.won(P[k])}<small> / 월 · VAT 별도</small></span>
           <ul>${Plan.FEATURES[k].map(f => `<li>${U.esc(f)}</li>`).join('')}</ul></button>`;
       const hist = Store.payments().filter(p => p.status === 'DONE').slice(0, 5);
       document.getElementById('root').innerHTML = `
@@ -104,7 +105,7 @@
         <div class="now card"><span><small>지금</small><b>${U.esc(Plan.summary())}</b></span>
           <span class="muted small">${s.active && s.plan !== 'trial' ? '결제하면 끝나는 날 뒤로 1개월 이어져요' : '결제한 날부터 1개월'}</span></div>
         <div class="plans" role="radiogroup" aria-label="요금제">${card('basic')}${card('premium', '추천')}</div>
-        <div class="execs card"><span class="t"><b>추가 임원</b><small>대표님 외에 같은 회사 임원 1명당 월 ${Plan.won(P.perExec)} · 비서 · 기사 계정은 무료</small></span>
+        <div class="execs card"><span class="t"><b>추가 임원</b><small>대표님 외에 같은 회사 임원 1명당 월 ${Plan.won(P.perExec)}(VAT 별도) · 비서 · 기사 계정은 무료</small></span>
           <span class="step"><button type="button" data-ex="-1" aria-label="임원 줄이기">−</button><output id="exN">${this.execs}</output><button type="button" data-ex="1" aria-label="임원 늘리기">+</button></span></div>
         <div class="total card" id="total"></div>
         ${Store.mode === 'demo' ? '<p class="demo-note">데모 모드예요. 실제 결제창 없이 바로 반영돼요.</p>' : '<div id="payment-method"></div><div id="agreement"></div>'}
@@ -121,13 +122,15 @@
       this.update();
       if (Store.mode === 'supabase') this.initToss();
     },
-    amount() { return Plan.price(this.plan, this.execs); },
+    amount() { return Plan.charge(this.plan, this.execs).total; },
     update() {
-      const P = Plan.PRICES, a = this.amount();
+      const P = Plan.PRICES, c = Plan.charge(this.plan, this.execs), a = c.total;
       document.getElementById('total').innerHTML = `
         <div class="row"><span>${Plan.NAMES[this.plan]}</span><span>${Plan.won(P[this.plan])}</span></div>
         ${this.execs ? `<div class="row"><span>추가 임원 ${this.execs}명</span><span>${Plan.won(P.perExec * this.execs)}</span></div>` : ''}
-        <div class="row sum"><span>1개월 결제 금액</span><span>${Plan.won(a)}</span></div>`;
+        <div class="row"><span>부가세 (10%)</span><span>${Plan.won(c.vat)}</span></div>
+        <div class="row sum"><span>1개월 결제 금액</span><span>${Plan.won(a)}</span></div>
+        <div class="row vat"><span>공급가 ${Plan.won(c.supply)} + 부가세 ${Plan.won(c.vat)}</span><span>세금계산서 발행 가능</span></div>`;
       document.getElementById('payBtn').textContent = `${Plan.won(a)} 결제하기`;
       if (this.widgets) this.widgets.setAmount({ currency: 'KRW', value: a }).catch(() => {});
     },
@@ -194,7 +197,7 @@
         <h2 style="margin:0">${waiting ? '입금을 기다리고 있어요' : '결제가 완료됐어요'}</h2>
         <dl>
           <dt>요금제</dt><dd>${U.esc(Plan.NAMES[r.plan] || '')}</dd>
-          <dt>금액</dt><dd>${Plan.won(r.amount || 0)}</dd>
+          <dt>결제 금액</dt><dd>${Plan.won(r.amount || 0)} <small class="muted">(부가세 ${Plan.won(r.vat != null ? r.vat : Math.round((r.amount || 0) / 11))} 포함)</small></dd>
           ${r.method ? `<dt>결제 수단</dt><dd>${U.esc(r.method)}</dd>` : ''}
           ${r.periodEnd ? `<dt>이용 기간</dt><dd>${Plan.untilText(r.periodEnd)}까지</dd>` : ''}
           ${va ? `<dt>입금 계좌</dt><dd>${U.esc(va.bankCode || va.bank || '')} ${U.esc(va.accountNumber || '')}</dd><dt>입금 기한</dt><dd>${U.esc(new Date(va.dueDate).toLocaleString('ko-KR'))}</dd>` : ''}

@@ -349,7 +349,7 @@ const App = {
   openAI() {
     if (!Plan.can('ai')) {
       const m = this.modal(`<div class="ai"><div class="ai-head"><span class="ico">${Icon.svg('mic', 20)}</span><div><h3>AI 비서</h3><p>지금 요금제: ${U.esc(Plan.NAMES[Plan.state().plan])}</p></div><button class="sq" data-close aria-label="닫기">${Icon.svg('x', 18)}</button></div>
-        <p style="margin:4px 0 12px;font-size:1.05em">AI 비서는 <b>'AI 비서 포함'</b> 요금제(월 ${Plan.won(Plan.PRICES.premium)})에서 쓸 수 있어요. 말로 일정을 넣고 바꾸고 미룰 수 있어요.</p>
+        <p style="margin:4px 0 12px;font-size:1.05em">AI 비서는 <b>'AI 비서 포함'</b> 요금제(월 ${Plan.won(Plan.PRICES.premium)}, VAT 별도)에서 쓸 수 있어요. 말로 일정을 넣고 바꾸고 미룰 수 있어요.</p>
         <a class="btn primary" style="width:100%" href="${U.esc(Plan.payUrl())}">요금제 바꾸기</a></div>`);
       return m;
     }

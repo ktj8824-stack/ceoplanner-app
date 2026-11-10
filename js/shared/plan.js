@@ -4,6 +4,8 @@
    - 결제 1번 = 1개월. 끝나기 전에 또 결제하면 끝나는 날 뒤로 1개월 이어 붙어요.
    - 막는 곳: AI 비서(기본 요금제 · 기간 끝) · 기간이 끝나면 앱 · 웹 전체에 결제 안내 (데이터는 그대로 보관) */
 const Plan = {
+  // 가격은 모두 부가세 별도(VAT 별도)예요. 결제 금액 = 가격 + 부가세 10% (B2B 관행, 세금계산서 기준)
+  VAT_RATE: 0.1,
   PRICES: { basic: 59000, premium: 100000, perExec: 50000, maxExec: 20, trialDays: 14 },
   NAMES: { trial: '무료 체험', basic: '기본', premium: 'AI 비서 포함', expired: '이용 기간 끝남' },
   FEATURES: {
@@ -24,7 +26,12 @@ const Plan = {
   can(feature) { const s = this.state(); return feature === 'ai' ? s.ai : s.active; },
 
   won(n) { return Number(n).toLocaleString('ko-KR') + '원'; },
-  price(plan, execs = 0) { return this.PRICES[plan] + this.PRICES.perExec * execs; },
+  /** 요금표 가격(공급가) → { supply, vat, total } — 서버 quote 와 같은 계산 */
+  charge(plan, execs = 0) {
+    const supply = this.PRICES[plan] + this.PRICES.perExec * execs;
+    const vat = Math.round(supply * this.VAT_RATE);
+    return { supply, vat, total: supply + vat };
+  },
   untilText(iso) {
     if (!iso) return '';
     const d = new Date(iso);
@@ -55,6 +62,7 @@ const Plan = {
         <li><b>기본</b> 월 ${this.won(this.PRICES.basic)}</li>
         <li><b>AI 비서 포함</b> 월 ${this.won(this.PRICES.premium)}</li>
       </ul>
+      <p class="muted small">VAT 별도 가격이에요 (결제 시 부가세 10% 추가)</p>
       ${can ? `<a class="btn primary" href="${U.esc(this.payUrl())}">결제하고 계속 쓰기</a>` : '<p class="muted small">회사 대표님이나 비서님께 결제를 요청해 주세요.</p>'}
       ${Store.mode === 'supabase' ? '<button class="btn quiet" data-logout>로그아웃</button>' : '<button class="btn quiet" data-plan-reset>데모: 체험 기간 다시 시작</button>'}
     </div>`;
