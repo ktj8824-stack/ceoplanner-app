@@ -397,3 +397,7 @@ nav.tabs .mic-tab .mic { top: -34px; width: 60px; height: 60px; border-radius: 3
 .notice-list { width: 100%; box-sizing: border-box; }
 .notice-list li, .notice-list details { min-width: 0; box-sizing: border-box; width: 100%; }
 .notice-list summary { min-width: 0; }
+/* 아래 메뉴 아이콘만 살짝(8px) 위로 — 가운데 AI 비서 원은 그 자리 그대로 */
+nav.tabs { padding-bottom: max(10px, calc(var(--sab, env(safe-area-inset-bottom)) - 12px)); }
+nav.tabs .mic-tab .mic { top: -26px; }
+nav.tabs .mic-tab > span:last-child { transform: translateY(8px); }
