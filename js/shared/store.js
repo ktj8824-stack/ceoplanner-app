@@ -62,6 +62,11 @@ const Store = {
     return this.data.company;
   },
   payments() { return this.data.payments || []; },
+  /** 공지사항 (새 글 먼저, 고정 글은 맨 위) */
+  notices() {
+    const list = this.data.notices || (this.mode === 'demo' ? Demo.notices() : []);
+    return [...list].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.at.localeCompare(a.at));
+  },
   /** 데모 전용: 회사 구독 정보 바꾸기 */
   demoSetCompany(patch) { this.data.company = { ...this.company(), ...patch }; this._saveDemo(); },
 
@@ -292,12 +297,13 @@ const Store = {
   async _reload() {
     if (!this.ceoId) { this.data = this._empty(); return; }
     // schedule_feed 뷰: 비서에게는 개인 일정을 서버에서 '바쁨'으로 가려서 내려줌
-    const [sch, msg, prof, mem, co, pay] = await Promise.all([
+    const [sch, msg, prof, mem, co, pay, ntc] = await Promise.all([
       this.client.from('ceo_schedule_feed').select('*').eq('ceo_id', this.ceoId),
       this.client.from('ceo_messages').select('*').eq('ceo_id', this.ceoId).order('created_at', { ascending: true }).limit(300),
       this.client.from('ceo_profiles').select('name, settings').eq('id', this.ceoId).single(),
       this.companyId ? this.client.from('ceo_profiles').select('login_id, name, role, phone').eq('company_id', this.companyId) : Promise.resolve({ data: [] }),
       this.companyId ? this.client.from('ceo_companies').select('plan, trial_until, paid_until, extra_execs, next_plan, next_extra_execs').eq('id', this.companyId).maybeSingle() : Promise.resolve({ data: null }),
+      this.client.from('ceo_notices').select('id, title, body, pinned, created_at').order('created_at', { ascending: false }).limit(30).then(r => r, () => ({ data: [] })),
       this.companyId ? this.client.from('ceo_payments').select('order_id, plan, kind, extra_execs, amount, vat_amount, status, method, approved_at, period_end, mode, created_at').eq('company_id', this.companyId).neq('status', 'READY').order('created_at', { ascending: false }).limit(12) : Promise.resolve({ data: [] }),
     ]);
     if (sch.error) throw sch.error;
@@ -307,6 +313,7 @@ const Store = {
       schedules: (sch.data || []).map(r => this._fromRow(r)),
       company: co && co.data ? { plan: co.data.plan, trialUntil: co.data.trial_until, paidUntil: co.data.paid_until, extraExecs: co.data.extra_execs || 0, nextPlan: co.data.next_plan || null, nextExtraExecs: co.data.next_extra_execs ?? null } : null,
       payments: ((pay && pay.data) || []).map(r => ({ orderId: r.order_id, kind: r.kind || 'month', plan: r.plan, extraExecs: r.extra_execs, amount: r.amount, vat: r.vat_amount, status: r.status, method: r.method, approvedAt: r.approved_at, periodEnd: r.period_end, mode: r.mode })),
+      notices: ((ntc && ntc.data) || []).map(r => ({ id: r.id, title: r.title, body: r.body || '', pinned: !!r.pinned, at: r.created_at })),
       members: (mem.data || []).map(r => ({ loginId: r.login_id, name: r.name, role: r.role, phone: r.phone || '' })),
       messages: (msg.data || []).map(r => ({ id: r.id, from: r.sender_role, body: r.body, urgent: r.urgent, ref: r.ref_id, at: r.created_at })),
     };

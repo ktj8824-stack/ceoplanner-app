@@ -108,9 +108,9 @@ const App = {
   hero() {
     const p = this.profile();
     const now = new Date();
-    const off = !['granted', 'unsupported'].includes(this.notifState());
+    const fresh = this.unreadNotices();
     const top = `<div class="hero-top"><div class="hello"><small>${this.longDate(U.today())}</small><b>${U.esc(p.name || '대표')}님, ${this.greet()}</b></div>
-      <button class="hero-bell" data-bell aria-label="${off ? '기상 · 출발 알림 꺼짐 — 켜기' : '알림 켜짐'}">${Icon.svg('bell', 20)}${off ? '<i></i>' : ''}</button></div>`;
+      <button class="hero-bell" data-bell aria-label="공지사항${fresh ? ` (새 공지 ${fresh}개)` : ''}">${Icon.svg('bell', 20)}${fresh ? '<i></i>' : ''}</button></div>`;
     const n = this.next();
     if (!n) return `<header class="hero">${top}<div class="next-card rest"><b>남은 일정이 없어요</b><span>내일 일정은 비서가 정리하면 여기에 보여요.</span></div></header>`;
     const { s, p: pl } = n;
@@ -326,6 +326,27 @@ const App = {
     return back;
   },
 
+  // ───────── 공지사항 (오른쪽 위 종) ─────────
+  /** 아직 안 본 공지 수 — 마지막으로 연 시각보다 새 공지 */
+  unreadNotices() {
+    let seen = ''; try { seen = localStorage.getItem('CEOP_NOTICE_SEEN') || ''; } catch { /* */ }
+    return Store.notices().filter(n => n.at > seen).length;
+  },
+  openNotices() {
+    const list = Store.notices();
+    let seen = ''; try { seen = localStorage.getItem('CEOP_NOTICE_SEEN') || ''; } catch { /* */ }
+    const d = iso => { const t = new Date(iso); return `${t.getFullYear()}.${t.getMonth() + 1}.${t.getDate()}`; };
+    this.modal(`<div class="notices">
+      <div class="sheet-head"><h3>공지사항</h3><button class="sq" data-close aria-label="닫기">${Icon.svg('x', 18)}</button></div>
+      ${list.length ? `<ul class="notice-list">${list.map((n, i) => `<li>
+        <details ${i === 0 ? 'open' : ''}><summary><span class="t">${n.pinned ? '<em>고정</em>' : ''}${n.at > seen ? '<i class="new">새 글</i>' : ''}<b>${U.esc(n.title)}</b></span><small>${d(n.at)}</small></summary>
+        <p>${U.esc(n.body).replace(/\n/g, '<br>')}</p></details></li>`).join('')}</ul>`
+        : '<p class="muted" style="padding:20px 0;text-align:center">아직 공지사항이 없어요.</p>'}
+    </div>`);
+    try { if (list[0]) localStorage.setItem('CEOP_NOTICE_SEEN', list.reduce((m, n) => n.at > m ? n.at : m, '')); } catch { /* */ }
+    this.render();
+  },
+
   briefing(id) {
     const s = Store.get(id); if (!s) return;
     const b = s.briefing || {};
@@ -456,7 +477,7 @@ const App = {
     // 긴급은 한 번 누르면 바로 전송 (입력창 없이)
     on('[data-urgent]', safe(async () => { await Store.send('지금 바로 연락 주세요', { urgent: true }); U.toast('긴급 요청을 보냈어요'); }));
     on('[data-notif]', () => this.askNotif());
-    on('[data-bell]', () => { if (['granted', 'unsupported'].includes(this.notifState())) this.go('me'); else this.askNotif(); });
+    on('[data-bell]', () => this.openNotices());
     on('[data-exitdemo]', () => Store.exitDemo());
     on('[data-tabgo]', el => this.go(el.dataset.tabgo));
     on('[data-edit]', el => { if (el.dataset.edit === 'notif') return U.toast('알림을 끄려면 브라우저 설정에서 바꿔 주세요'); this.editProfile(el.dataset.edit); });
