@@ -57,7 +57,8 @@ const App = {
 
   render() {
     document.querySelectorAll('#tabs button').forEach(b => { b.classList.toggle('on', b.dataset.tab === this.tab); b.setAttribute('aria-current', b.dataset.tab === this.tab ? 'page' : 'false'); });
-    const demo = Store.mode === 'demo' ? `<div class="demo-bar">데모 모드 · <a href="${U.esc(CEOP_CONFIG.SECRETARY_URL)}" target="_blank">비서 웹</a>과 바로 연동돼요${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''}</div>` : '';
+    // 아이폰 앱(파일로 열림)에서는 데모 안내 줄을 빼서 화면을 위로 (내 정보 아래에 '데모 데이터 처음으로'는 그대로)
+    const demo = Store.mode === 'demo' && location.protocol !== 'file:' ? `<div class="demo-bar">데모 모드 · <a href="${U.esc(CEOP_CONFIG.SECRETARY_URL)}" target="_blank">비서 웹</a>과 바로 연동돼요${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''}</div>` : '';
     const root = document.getElementById('root');
     const ps = Plan.state();
     document.getElementById('tabs').hidden = !ps.active;

@@ -367,3 +367,10 @@ nav.tabs { height: auto; padding-top: 4px; padding-bottom: max(2px, calc(env(saf
 nav.tabs button { height: 50px; justify-content: flex-end; gap: 2px; padding-bottom: 2px; }
 body.app { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 nav.tabs .mic-tab .mic { top: -34px; width: 60px; height: 60px; border-radius: 30px; }
+/* 위쪽 여백 줄이기 — 상태 표시줄 공간은 한 번만, 데모 안내는 그 아래 한 줄로 */
+.demo-bar { padding-top: calc(env(safe-area-inset-top) + 4px); padding-bottom: 6px; }
+.hero { padding-top: calc(6px + env(safe-area-inset-top)); }
+.page-head { padding-top: calc(8px + env(safe-area-inset-top)); }
+.demo-bar + .hero { padding-top: 10px; }
+.demo-bar + .page-head { padding-top: 10px; }
+.demo-bar + .plan-lock-wrap .plan-lock { margin-top: 24px; }
