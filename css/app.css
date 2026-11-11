@@ -409,3 +409,24 @@ nav.tabs .mic-tab > span:last-child { transform: translateY(16px); }
 /* 조정 단계: 요청함(회색) → 비서 확인 중(초록) → 조정됨 */
 .tl-gap.conflict button.asked { background: #fff; color: #8E2F1E; border: 1px solid #E3B7AC; opacity: 1; }
 .tl-gap.move .adj { margin-left: 6px; color: var(--ok); font-weight: 700; display: inline-flex; align-items: center; gap: 2px; }
+
+/* 차에 타면 자동 길안내 */
+#an-bg { position: fixed; inset: 0; z-index: 9999; background: rgba(15, 23, 42, .55); display: flex; align-items: flex-end; justify-content: center; padding: 16px 16px calc(var(--sab, env(safe-area-inset-bottom, 0px)) + 24px); }
+#an-box { width: 100%; max-width: 420px; background: var(--surface, #fff); border-radius: 22px; padding: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, .25); }
+.an-k { font-size: 14px; font-weight: 700; color: var(--slate, #475569); }
+.an-t { font-size: 22px; font-weight: 800; color: var(--ink, #0f172a); margin-top: 4px; }
+.an-d { font-size: 15px; color: var(--slate, #475569); margin-top: 6px; }
+.an-c { font-size: 15px; font-weight: 700; margin-top: 14px; }
+.an-b { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.an-b .an-go:only-child { grid-column: 1 / -1; }
+.an-go, .an-x { height: 50px; border-radius: 14px; border: 0; font-size: 16px; font-weight: 800; }
+.an-go { background: var(--ink, #0f172a); color: #fff; } .an-x { background: var(--porcelain, #eef2f7); color: var(--ink, #0f172a); }
+.an-go.an-tmap { background: #3461e6; } .an-go.an-kakao { background: #fbe54d; color: #1f2937; }
+.an-link { display: block; margin: 12px auto 0; color: var(--slate, #64748b); font-size: 15px; }
+.an-g-h { font-weight: 800; font-size: 15px; margin: 16px 0 8px; }
+.an-g-ol { padding-left: 22px; margin: 0; list-style: decimal; font-size: 14px; line-height: 1.6; }
+.an-g-note { font-size: 13.5px; color: var(--slate, #64748b); line-height: 1.55; margin-top: 6px; }
+.an-g-seg { width: fit-content; }
+.an-g-link { display: flex; gap: 6px; align-items: center; }
+.an-g-link input { flex: 1; min-width: 0; height: 42px; border: 1px solid var(--line, #e2e8f0); border-radius: 10px; padding: 0 10px; font-size: 15px; background: var(--porcelain, #f8fafc); }
+.an-g-link .btn { white-space: nowrap; }

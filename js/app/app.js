@@ -41,6 +41,8 @@ const App = {
     this.render();
     this.scheduleAlerts();
     setInterval(() => { if (this.tab === 'home') this.render(); }, 60000);
+    this._booted = true;
+    if (window.AutoNav) AutoNav.init();   // 차에 타면 자동 길안내 (?go=next · ceoplanner://next)
   },
 
   go(tab) {
@@ -301,6 +303,7 @@ const App = {
         <section class="group"><h2>알림 · 화면</h2><div class="box">
           ${notifRow}
           ${row('data-edit="prep"', '아침 준비 시간', U.durLabel(p.prepMin || 60))}
+          ${row('data-autonav', '차에 타면 자동 길안내', '', '차와 연결되면 다음 일정 장소로 내비가 켜져요')}
           ${row('data-edit="name"', '이름', p.name || '')}
           ${sizes}</div></section>
         <section class="group"><h2>구독</h2><div class="box">
@@ -495,6 +498,7 @@ const App = {
     on('[data-bell]', () => this.openNotices());
     on('[data-exitdemo]', () => Store.exitDemo());
     on('[data-tabgo]', el => this.go(el.dataset.tabgo));
+    on('[data-autonav]', () => AutoNav.openGuide());
     on('[data-edit]', el => { if (el.dataset.edit === 'notif') return U.toast('알림을 끄려면 브라우저 설정에서 바꿔 주세요'); this.editProfile(el.dataset.edit); });
     on('[data-size]', el => { localStorage.setItem('CEOP_FONT', el.dataset.size); this.applySize(); this.render(); });
     on('[data-reset]', () => { if (confirm('데모 데이터를 처음 상태로 되돌릴까요?')) Store.resetDemo(); });
