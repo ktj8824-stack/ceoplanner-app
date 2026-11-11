@@ -430,3 +430,14 @@ nav.tabs .mic-tab > span:last-child { transform: translateY(16px); }
 .an-g-link { display: flex; gap: 6px; align-items: center; }
 .an-g-link input { flex: 1; min-width: 0; height: 42px; border: 1px solid var(--line, #e2e8f0); border-radius: 10px; padding: 0 10px; font-size: 15px; background: var(--porcelain, #f8fafc); }
 .an-g-link .btn { white-space: nowrap; }
+
+/* 홈: 차에 타면 자동 길안내 홍보 줄 */
+.anp { position: relative; margin: 0 0 12px; }
+.anp-go { display: flex; align-items: center; gap: 10px; padding: 11px 40px 11px 12px; border-radius: 16px; background: var(--navy); color: #fff; text-decoration: none; }
+.anp-ic { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--brass-ink); color: #fff; }
+.anp-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.anp-t b { font-size: 14.5px; font-weight: 700; letter-spacing: -0.3px; }
+.anp-t small { font-size: 12px; color: #C3CBD6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.anp-btn { flex: none; height: 30px; padding: 0 10px; border-radius: 9px; background: #fff; color: var(--navy); font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.anp-x { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 30px; height: 30px; border: 0; background: transparent; color: #8A96A8; font-size: 14px; cursor: pointer; }
+.an-g-guide { display: flex; width: 100%; margin-top: 14px; text-decoration: none; }

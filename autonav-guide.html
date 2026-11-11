@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>차에 타면 자동 길안내 · CEO플래너</title>
+<meta name="description" content="차에 타면 휴대폰이 알아서 오늘 다음 일정으로 길안내를 켭니다. 아이폰·갤럭시 1분 설정 가이드.">
+<meta property="og:title" content="차에 타면, 다음 일정으로 길안내가 저절로 — CEO플래너">
+<meta property="og:description" content="앱을 열 필요도 없어요. 차에 타는 순간 내비가 다음 목적지로 켜집니다. 1분 설정 가이드.">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{--ink:#14161A;--sub:#4A4F5A;--mute:#6B7180;--line:#E6E7EB;--bg:#F6F7F9;--acc:#0F1B2D;--acc-ink:#1B2B44;--acc-bg:#F3EDE1;--ok:#1F7A4C;--ok-bg:#E7F4EC;--warn:#9A4A06;--warn-bg:#FDF1E3}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#fff;color:var(--ink);font-family:'IBM Plex Sans KR',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:16px;line-height:1.65;word-break:keep-all;overflow-wrap:break-word;-webkit-font-smoothing:antialiased}
+a{color:var(--acc)}
+.in{max-width:1080px;margin:0 auto;padding:0 20px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:6px}
+
+.top{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);border-bottom:1px solid var(--line)}
+.top .in{display:flex;align-items:center;justify-content:space-between;min-height:60px;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.brand img{width:30px;height:30px;border-radius:8px}
+.brand b{font-size:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 20px;border-radius:12px;font-weight:700;font-size:15.5px;text-decoration:none;border:1px solid transparent;white-space:nowrap;cursor:pointer;font-family:inherit}
+.btn.pri{background:var(--acc);color:#fff}.btn.pri:hover{background:var(--acc-ink)}
+.btn.line{border-color:#D5D8DF;color:var(--ink);background:#fff}
+.btn.sm{height:40px;padding:0 14px;font-size:14px;border-radius:10px}
+
+/* 첫 화면 */
+.hero{background:linear-gradient(180deg,#F7F3EA 0%,#fff 100%);border-bottom:1px solid var(--line)}
+.hero .in{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:40px;align-items:center;padding-top:56px;padding-bottom:56px}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:var(--acc);background:#fff;border:1px solid #E4D6BC;border-radius:999px;padding:5px 12px;margin:0 0 16px}
+h1{margin:0 0 16px;font-size:clamp(32px,5vw,50px);line-height:1.22;letter-spacing:-1.4px;font-weight:700}
+h1 em{font-style:normal;color:#80632C}
+.lead{margin:0 0 24px;font-size:18px;color:var(--sub);max-width:30em}
+.cta{display:flex;flex-wrap:wrap;gap:10px}
+
+/* 휴대폰 그림 */
+.phone{justify-self:center;width:min(300px,100%);border-radius:38px;background:#14161A;padding:9px;box-shadow:0 24px 60px rgba(20,22,26,.18)}
+.scr{border-radius:30px;background:#E9E2D3;aspect-ratio:9/18.5;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.map{flex:1;background:
+  linear-gradient(90deg,transparent 47%,#fff 47%,#fff 53%,transparent 53%) 0 0/100% 100%,
+  linear-gradient(0deg,transparent 60%,#fff 60%,#fff 64%,transparent 64%),
+  linear-gradient(25deg,transparent 30%,#fff 30%,#fff 33%,transparent 33%),
+  #DDE3EE;position:relative}
+.map .route{position:absolute;left:50%;top:18%;width:6px;height:52%;background:var(--acc);border-radius:4px;transform:translateX(-50%)}
+.map .car{position:absolute;left:50%;bottom:26%;width:26px;height:26px;margin-left:-13px;border-radius:50%;background:var(--acc);border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.map .pin{position:absolute;left:50%;top:13%;width:16px;height:16px;margin-left:-8px;border-radius:50% 50% 50% 0;background:#E5484D;transform:rotate(-45deg)}
+.sheet{position:absolute;left:10px;right:10px;bottom:10px;background:#fff;border-radius:20px;padding:14px 14px 12px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.sheet .k{font-size:11.5px;font-weight:700;color:var(--acc)}
+.sheet .t{font-size:16px;font-weight:700;line-height:1.35;margin-top:2px}
+.sheet .d{font-size:12px;color:var(--sub);margin-top:3px}
+.sheet .c{font-size:12.5px;font-weight:600;margin-top:10px;color:#334155}
+.sheet .c b{color:var(--acc);font-size:15px}
+.sheet .bb{display:flex;gap:6px;margin-top:10px}
+.sheet .bb span{flex:1;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;background:#F1F5F9;color:#334155}
+.sheet .bb span.go{background:var(--acc);color:#fff}
+.bt{position:absolute;top:12px;left:12px;right:12px;display:flex;align-items:center;gap:8px;background:rgba(20,22,26,.86);color:#fff;border-radius:14px;padding:9px 12px;font-size:12px;font-weight:600}
+.bt i{width:8px;height:8px;border-radius:50%;background:#3DDC84;flex:none}
+
+/* 흐름 */
+.sec{padding-top:64px;padding-bottom:64px}
+.sec h2{margin:0 0 10px;font-size:clamp(25px,3vw,32px);line-height:1.3;letter-spacing:-.8px}
+.sec .desc{margin:0 0 32px;color:var(--sub);font-size:17px;max-width:40em}
+.band{background:var(--bg);border-block:1px solid var(--line)}
+.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;counter-reset:f}
+.flow li{list-style:none;background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px 16px;position:relative}
+.flow li::before{counter-increment:f;content:counter(f);display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--acc-bg);color:var(--acc-ink);font-weight:700;font-size:14px;align-items:center;justify-content:center;margin-bottom:10px}
+.flow b{display:block;font-size:16.5px;line-height:1.4}
+.flow p{margin:6px 0 0;font-size:14px;color:var(--sub)}
+.flow{padding:0;margin:0}
+.why{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:28px}
+.why div{border-radius:14px;padding:16px;background:var(--acc-bg);color:var(--acc-ink);font-weight:600;font-size:15px;line-height:1.5}
+.why small{display:block;font-weight:500;color:var(--sub);margin-top:4px;font-size:13.5px}
+
+/* 준비 */
+.prep{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px}
+.card h3{margin:0 0 6px;font-size:17px}
+.card p{margin:0;color:var(--sub);font-size:14.5px}
+.linkbox{display:flex;gap:8px;align-items:center;margin-top:12px}
+.linkbox input{flex:1;min-width:0;height:44px;border:1px solid var(--line);border-radius:10px;padding:0 12px;font-size:13.5px;background:var(--bg);color:var(--ink);font-family:'IBM Plex Mono',monospace}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:2px 7px;margin-right:6px;vertical-align:1px}
+.tag.ios{background:#EDEDF0;color:#14161A}.tag.and{background:#E7F4EC;color:var(--ok)}
+
+/* 탭 */
+.tabs{display:inline-flex;background:#ECEDF1;border-radius:12px;padding:4px;gap:4px;margin-bottom:24px}
+.tabs button{height:42px;padding:0 22px;border:0;border-radius:9px;background:transparent;font:inherit;font-weight:700;font-size:15px;color:var(--sub);cursor:pointer}
+.tabs button[aria-selected="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;padding:0;margin:0}
+.step{list-style:none;background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;display:flex;flex-direction:column}
+.step .pic{background:var(--bg);border-bottom:1px solid var(--line);padding:16px;display:flex;justify-content:center}
+.mini{width:170px;background:#fff;border:1px solid #D9DCE3;border-radius:20px;padding:10px 10px 12px;font-size:11.5px;box-shadow:0 6px 16px rgba(20,22,26,.06)}
+.mini .h{font-weight:700;font-size:13px;margin:2px 2px 8px}
+.mini .row{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 8px;border-radius:8px;background:#F4F5F8;margin-top:5px;color:#334155}
+.mini .row.on{background:var(--acc);color:#fff;font-weight:700}
+.mini .row.hl{outline:2px solid var(--acc);background:#fff;font-weight:700;color:var(--ink)}
+.mini .tabbar{display:flex;justify-content:space-around;margin-top:10px;border-top:1px solid var(--line);padding-top:7px;color:var(--mute);font-size:10.5px}
+.mini .tabbar b{color:var(--acc)}
+.mini .url{margin-top:6px;border:1px dashed var(--acc);border-radius:8px;padding:7px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--acc-ink);background:var(--acc-bg);word-break:break-all}
+.mini .chk{width:14px;height:14px;border-radius:50%;background:var(--acc);display:inline-block;flex:none}
+.mini .plus{margin-left:auto;width:22px;height:22px;border-radius:50%;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
+.step .txt{padding:14px 16px 16px}
+.step .n{font-size:12.5px;font-weight:700;color:var(--acc)}
+.step b{display:block;font-size:16px;line-height:1.45;margin-top:2px}
+.step p{margin:6px 0 0;font-size:14px;color:var(--sub)}
+.tip{margin-top:18px;background:var(--warn-bg);color:#5C2E04;border-radius:14px;padding:14px 16px;font-size:14.5px}
+.tip b{color:var(--warn)}
+
+/* 질문 */
+.faq details{border:1px solid var(--line);border-radius:14px;background:#fff;margin-top:10px}
+.faq summary{cursor:pointer;padding:16px 18px;font-weight:700;font-size:16px;list-style:none;display:flex;justify-content:space-between;gap:12px}
+.faq summary::after{content:'+';color:var(--mute);font-weight:500;font-size:20px;line-height:1}
+.faq details[open] summary::after{content:'–'}
+.faq details p{margin:0;padding:0 18px 16px;color:var(--sub);font-size:15px}
+
+.end{background:var(--ink);color:#fff;text-align:center}
+.end h2{color:#fff}
+.end .desc{color:#C9CCD6;margin-left:auto;margin-right:auto}
+.end .cta{justify-content:center}
+.end .btn.line{background:transparent;color:#fff;border-color:#4A4F5A}
+footer{padding:22px 0 32px;color:var(--mute);font-size:13px;text-align:center}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:10px;padding:10px 16px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
+.toast.on{opacity:1}
+
+@media (max-width:860px){
+  .hero .in{grid-template-columns:1fr;padding-top:36px;padding-bottom:40px;gap:32px}
+  .flow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .why,.prep{grid-template-columns:1fr}
+  .sec{padding-top:48px;padding-bottom:48px}
+}
+@media (max-width:420px){
+  .flow{grid-template-columns:1fr}
+  .tabs{display:flex}.tabs button{flex:1;padding:0 10px}
+  .lead{font-size:16.5px}
+}
+@media print{
+  .top,.tabs,.end .cta,.linkbox button{display:none!important}
+  .panel[hidden]{display:block!important}
+  .step,.card,.flow li{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="in">
+    <a class="brand" href="index.html"><img src="icon.svg" alt=""><b>CEO플래너</b></a>
+    <a class="btn pri sm" href="#setup">1분 설정하기</a>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="in">
+    <div>
+      <p class="kicker">🚗 CEO플래너 대표 기능</p>
+      <h1>차에 타면,<br><em>다음 일정으로</em><br>길안내가 저절로.</h1>
+      <p class="lead">앱을 열 필요도, 주소를 칠 필요도 없어요. 휴대폰이 차와 연결되는 순간 CEO플래너가 오늘 남은 일정 중 다음 장소를 찾아 티맵·카카오맵를 켭니다.</p>
+      <div class="cta">
+        <a class="btn pri" href="#setup">지금 설정하기</a>
+        <a class="btn line" href="#how">어떻게 되나요?</a>
+      </div>
+    </div>
+    <div class="phone" aria-label="차에 탔을 때 화면 예시">
+      <div class="scr">
+        <div class="map"><span class="route"></span><span class="pin"></span><span class="car"></span></div>
+        <div class="bt"><i></i>차량 블루투스 연결됨</div>
+        <div class="sheet">
+          <div class="k">다음 일정 · 14:00</div>
+          <div class="t">투자사 미팅</div>
+          <div class="d">📍 서울 강남구 테헤란로 152</div>
+          <div class="c">티맵으로 안내를 시작합니다</div>
+          <div class="bb"><span class="go">티맵 안내 중</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="how">
+  <div class="in">
+    <h2>시동 걸면 끝. 나머지는 CEO플래너가.</h2>
+    <p class="desc">약속 시간에서 거꾸로 계산한 출발 시간을 CEO플래너가 알고 있어요. 그래서 "지금 어디로 가야 하는지"도 알고 있습니다.</p>
+    <ol class="flow">
+      <li><b>차에 탄다</b><p>휴대폰이 CarPlay·차량 블루투스에 연결돼요.</p></li>
+      <li><b>CEO플래너가 저절로 열림</b><p>휴대폰에 한 번 등록해 둔 자동 실행이 앱을 엽니다.</p></li>
+      <li><b>다음 목적지를 찾음</b><p>오늘 일정 중 아직 시작하지 않은 다음 일정의 장소를 골라요.</p></li>
+      <li><b>바로 내비 시작</b><p>고른 내비(티맵·카카오맵)로 바로 안내해요.</p></li>
+    </ol>
+    <div class="why">
+      <div>주소 검색 0번<small>회의·미팅 장소 주소를 매번 칠 필요가 없어요.</small></div>
+      <div>앱 열 필요 0번<small>이동 중에도 휴대폰을 만지지 않아도 돼요.</small></div>
+      <div>엉뚱한 곳 0번<small>오늘 순서대로, 다음 장소만 정확하게.</small></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec band" id="setup">
+  <div class="in">
+    <h2>1분 설정 — 딱 한 번만 하면 돼요</h2>
+    <p class="desc">휴대폰에 "차에 연결되면 CEO플래너 열기"를 한 번 등록해 두면, 그다음부터는 매일 자동이에요.</p>
+
+    <div class="prep">
+      <div class="card">
+        <h3>준비 1 · 앱에서 기본 내비 고르기</h3>
+        <p>CEO플래너 → <b>내 정보</b> → <b>차에 타면 자동 길안내</b> → <b>티맵</b> 또는 <b>카카오맵</b>. '매번 선택'으로 두면 탈 때마다 물어봐요.</p>
+      </div>
+      <div class="card">
+        <h3>준비 2 · 자동 실행 주소 복사</h3>
+        <p><span class="tag ios">아이폰 앱</span>CEO플래너 아이폰 앱을 쓰면 이 주소예요.</p>
+        <div class="linkbox"><input id="lk-app" readonly value="ceoplanner://next"><button class="btn pri sm" type="button" data-copy="lk-app">복사</button></div>
+        <p style="margin-top:12px"><span class="tag and">브라우저·갤럭시</span>사파리·크롬으로 쓰면 이 주소예요.</p>
+        <div class="linkbox"><input id="lk-web" readonly value="https://ktj8824-stack.github.io/ceoplanner-app/?go=next"><button class="btn pri sm" type="button" data-copy="lk-web">복사</button></div>
+      </div>
+    </div>
+
+    <div style="margin-top:36px">
+      <div class="tabs" role="tablist" aria-label="휴대폰 종류">
+        <button type="button" role="tab" id="t-ios" aria-controls="p-ios" aria-selected="true">아이폰</button>
+        <button type="button" role="tab" id="t-and" aria-controls="p-and" aria-selected="false">갤럭시</button>
+      </div>
+
+      <div class="panel" id="p-ios" role="tabpanel" aria-labelledby="t-ios">
+        <ol class="steps">
+          <li class="step">
+            <div class="pic"><div class="mini"><div class="h">단축어</div><div class="row">나의 단축어</div><div class="row">갤러리</div><div class="tabbar"><span>단축어</span><b>자동화</b><span>갤러리</span></div></div></div>
+            <div class="txt"><span class="n">1단계</span><b>'단축어' 앱 → 아래 '자동화'</b><p>아이폰에 기본으로 있는 앱이에요. 없으면 앱스토어에서 '단축어'를 받으세요.</p></div>
+          </li>
+          <li class="step">
+            <div class="pic"><div class="mini"><div class="h" style="display:flex;align-items:center">자동화<span class="plus">+</span></div><div class="row hl">새로운 자동화</div><div class="row">개인용 자동화</div></div></div>
+            <div class="txt"><span class="n">2단계</span><b>오른쪽 위 '＋' (또는 '새로운 자동화')</b><p>처음이면 가운데 '새로운 자동화' 버튼이 보여요.</p></div>
+          </li>
+          <li class="step">
+            <div class="pic"><div class="mini"><div class="h">언제</div><div class="row">알람</div><div class="row hl">CarPlay</div><div class="row">블루투스</div><div class="row">Wi-Fi</div></div></div>
+            <div class="txt"><span class="n">3단계</span><b>'CarPlay' 고르기</b><p>CarPlay가 없는 차는 <b>'블루투스'</b> → 차량 이름을 고르세요.</p></div>
+          </li>
+          <li class="step">
+            <div class="pic"><div class="mini"><div class="h">CarPlay</div><div class="row"><span>연결될 때</span><span class="chk"></span></div><div class="row">연결 해제될 때</div><div class="row on">즉시 실행</div><div class="row">실행 전 확인</div></div></div>
+            <div class="txt"><span class="n">4단계</span><b>'연결될 때' + '즉시 실행' → 다음</b><p>'즉시 실행'을 꼭 고르세요. 그래야 묻지 않고 바로 열려요.</p></div>
+          </li>
+          <li class="step">
+            <div class="pic"><div class="mini"><div class="h">동작 추가</div><div class="row hl">🔎 URL 열기</div><div class="row">앱 열기</div><div class="row">메시지 보내기</div></div></div>
+            <div class="txt"><span class="n">5단계</span><b>'새로운 빈 자동화' → 'URL 열기' 검색</b><p>동작 검색 칸에 'URL'을 치면 'URL 열기'가 나와요.</p></div>
+          </li>
+          <li class="step">
+            <div class="pic"><div class="mini"><div class="h">URL 열기</div><div class="url">ceoplanner://next</div><div class="row on" style="margin-top:10px;justify-content:center">완료</div></div></div>
+            <div class="txt"><span class="n">6단계</span><b>복사한 주소 붙여넣기 → 완료</b><p>아이폰 앱이면 <span class="mono">ceoplanner://next</span>, 사파리로 쓰면 https 주소를 넣으세요.</p></div>
+          </li>
+        </ol>
+        <div class="tip"><b>확인하는 법</b> · 차에 타기 전에 단축어 앱에서 방금 만든 자동화를 눌러 보세요. CEO플래너가 열리고 다음 일정이 뜨면 성공이에요.</div>
+      </div>
+
+      <div class="panel" id="p-and" role="tabpanel" aria-labelledby="t-and" hidden>
+        <ol class="steps">
+          <li class="step">
+            <div class="pic"><div class="mini"><div class="h">설정</div><div class="row">연결</div><div class="row">디스플레이</div><div class="row hl">모드 및 루틴</div><div class="row">배터리</div></div></div>
+            <div class="txt"><span class="n">1단계</span><b>설정 → '모드 및 루틴'</b><p>갤럭시(One UI)에 기본으로 있어요. 설정 검색에 '루틴'을 쳐도 나와요.</p></div>
+          </li>
+          <li class="step">
+            <div class="pic"><div class="mini"><div class="h" style="display:flex;align-items:center">루틴<span class="plus">+</span></div><div class="row">추천 루틴</div><div class="tabbar"><span>모드</span><b>루틴</b></div></div></div>
+            <div class="txt"><span class="n">2단계</span><b>아래 '루틴' 탭 → 위 '＋'</b><p>새 루틴을 만드는 화면이 열려요.</p></div>
+          </li>
+          <li class="step">
+            <div class="pic"><div class="mini"><div class="h">조건</div><div class="row">시간</div><div class="row hl">블루투스 기기</div><div class="row">Android Auto</div></div></div>
+            <div class="txt"><span class="n">3단계</span><b>'조건' → '블루투스 기기' → 내 차 고르기</b><p>Android Auto를 쓰면 'Android Auto'를 골라도 돼요.</p></div>
+          </li>
+          <li class="step">
+            <div class="pic"><div class="mini"><div class="h">실행할 동작</div><div class="row hl">웹페이지 열기</div><div class="row on" style="margin-top:8px">주소 붙여넣기</div></div></div>
+            <div class="txt"><span class="n">4단계</span><b>'실행할 동작' → '웹페이지 열기' → 주소 붙여넣기</b><p>위 '브라우저·갤럭시' 주소를 넣으세요.</p></div>
+          </li>
+          <li class="step">
+            <div class="pic"><div class="mini"><div class="h">루틴 이름</div><div class="url" style="font-family:inherit;font-size:11.5px">차 타면 CEO플래너</div><div class="row on" style="margin-top:10px;justify-content:center">완료</div></div></div>
+            <div class="txt"><span class="n">5단계</span><b>이름 정하고 '완료'</b><p>예: '차 타면 CEO플래너'. 루틴이 켜져 있는지 확인하세요.</p></div>
+          </li>
+        </ol>
+        <div class="tip"><b>안 열리면</b> · 설정 → 애플리케이션 → CEO플래너 → <b>배터리 → 제한 없음</b>으로 바꿔 주세요. 절전 때문에 막히는 경우가 있어요.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec faq">
+  <div class="in">
+    <h2>자주 묻는 질문</h2>
+    <details><summary>오늘 일정이 없으면 어떻게 되나요?</summary><p>"오늘 남은 일정이 없어요"라고 한 번 알려 주고 끝나요. 내비는 켜지지 않아요.</p></details>
+    <details><summary>일정이 끝났는데 또 안내하나요?</summary><p>아니요. 지난 일정은 건너뛰고 지금 가야 할 일정 장소로만 안내해요. 오늘 이동이 다 끝났으면 "수고하셨습니다"로 끝나요.</p></details>
+    <details><summary>가족 차를 탈 때도 켜지나요?</summary><p>등록한 차(CarPlay 또는 고른 블루투스 기기)에 연결될 때만 켜져요. 원하지 않을 땐 내비를 닫으면 돼요.</p></details>
+    <details><summary>로그인을 매번 해야 하나요?</summary><p>아니요. 앱에서 한 번 로그인해 두면 그다음부터 바로 안내돼요. 브라우저로 쓰는 경우엔 같은 브라우저에서 로그인해 두세요.</p></details>
+    <details><summary>무료로도 쓸 수 있나요?</summary><p>네. 자동 길안내는 추가 비용 없이 쓸 수 있어요.</p></details>
+  </div>
+</section>
+
+<section class="sec end">
+  <div class="in">
+    <h2>내일 아침, 시동만 거세요.</h2>
+    <p class="desc">출발 시간은 CEO플래너가 거꾸로 계산하고, 길은 차에 타는 순간 열립니다.</p>
+    <div class="cta">
+      <a class="btn pri" href="#setup">설정 다시 보기</a>
+      <a class="btn line" id="open-app" href="index.html">CEO플래너 열기</a>
+    </div>
+  </div>
+</section>
+</main>
+<footer>© CEO플래너 · 티맵, 카카오맵, CarPlay, Android Auto는 각 회사의 상표예요.</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  var app = 'https://ktj8824-stack.github.io/ceoplanner-app/';
+  document.getElementById('lk-web').value = app + '?go=next';
+  document.getElementById('open-app').href = app;
+  var isAnd = /Android/i.test(navigator.userAgent);
+  var tabs = [['t-ios', 'p-ios'], ['t-and', 'p-and']];
+  function pick(i) {
+    tabs.forEach(function (t, k) {
+      document.getElementById(t[0]).setAttribute('aria-selected', String(k === i));
+      document.getElementById(t[1]).hidden = k !== i;
+    });
+  }
+  tabs.forEach(function (t, k) { document.getElementById(t[0]).addEventListener('click', function () { pick(k); }); });
+  var q = new URLSearchParams(location.search).get('os');
+  pick(q === 'android' || (q !== 'ios' && isAnd) ? 1 : 0);
+  var toast = document.getElementById('toast'), tt;
+  function say(m) { toast.textContent = m; toast.classList.add('on'); clearTimeout(tt); tt = setTimeout(function () { toast.classList.remove('on'); }, 1600); }
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var inp = document.getElementById(b.getAttribute('data-copy'));
+      var v = inp.value;
+      var ok = function () { say('주소를 복사했어요'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(ok, function () { inp.select(); document.execCommand('copy'); ok(); });
+      else { inp.select(); document.execCommand('copy'); ok(); }
+    });
+  });
+})();
+</script>
+</body>
+</html>

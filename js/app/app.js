@@ -93,7 +93,7 @@ const App = {
 
   // ───────── 홈 ─────────
   home() {
-    return this.hero() + `<div class="body">${this.view === 'timeline' ? this.dayList() : this.calendar()}</div>`;
+    return this.hero() + `<div class="body">${window.AutoNav && AutoNav.promoHtml ? AutoNav.promoHtml() : ''}${this.view === 'timeline' ? this.dayList() : this.calendar()}</div>`;
   },
 
   greet() { const h = new Date().getHours(); return h < 11 ? '좋은 아침이에요' : h < 18 ? '좋은 오후예요' : '오늘도 수고하셨어요'; },
