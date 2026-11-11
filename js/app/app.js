@@ -156,7 +156,7 @@ const App = {
       let gap = '';
       if (i > 0) {
         if (w) gap = this.conflictGap(w);
-        else if (s.mode !== 'none' && s.travelMin) gap = `<span></span><div class="tl-gap move">${Icon.mode(s.mode, 14)} 이동 ${U.durLabel(s.travelMin)} · ${U.esc((Backtime.MODES[s.mode] || {}).label || '')}</div>`;
+        else if (s.mode !== 'none' && s.travelMin) { const adj = this.adjustedTo(s.id); gap = `<span></span><div class="tl-gap move">${Icon.mode(s.mode, 14)} 이동 ${U.durLabel(s.travelMin)} · ${U.esc((Backtime.MODES[s.mode] || {}).label || '')}${adj ? ` <b class="adj">${Icon.svg('check', 12)} ${adj}${adj.slice(-2) === '00' || adj.endsWith('5') ? '로' : '으로'} 조정됨</b>` : ''}</div>`; }
         else gap = '<span></span><div class="tl-gap"></div>';
       } else if (w) gap = this.conflictGap(w);
       const past = p.endAt < now;
@@ -169,12 +169,27 @@ const App = {
   },
 
   /** 겹침: 두 일정 사이에 빨간 줄 하나 + 조정 요청 */
+  /** 조정 요청 단계: none → asked(요청함) → seen(비서 확인 중) */
+  adjustStage(id) {
+    const msgs = Store.messages();
+    const req = [...msgs].reverse().find(m => m.from === 'ceo' && m.ref === id && m.body.includes('조정'));
+    if (!req) return 'none';
+    return msgs.some(m => m.from === 'secretary' && m.ref === id && String(m.at) > String(req.at)) ? 'seen' : 'asked';
+  },
+  /** 비서가 미뤄서 해결된 일정 → "11:30으로 조정됨" */
+  adjustedTo(id) {
+    const m = [...Store.messages()].reverse().find(x => x.from === 'secretary' && x.ref === id && /미뤘어요/.test(x.body));
+    const t = m && m.body.match(/시작을 (\d{1,2}:\d{2})/);
+    return t && Store.get(id)?.start === t[1] ? t[1] : '';
+  },
+
   conflictGap(w) {
-    const asked = this.sentAbout(w.b.id, '조정');
+    const stage = this.adjustStage(w.b.id);
     const name = this.profile().secretaryName || '비서';
     const txt = w.shortMin && !/겹/.test(w.msg) ? `이동 시간이<br>${w.shortMin}분 부족해요` : '앞 일정과<br>시간이 겹쳐요';
+    const label = stage === 'seen' ? `${Icon.svg('check', 14)} ${U.esc(name)} 확인 중` : stage === 'asked' ? '조정 요청함' : '비서에게 조정';
     return `<span></span><div class="tl-gap conflict" role="note"><i class="bar"></i><div class="cg"><span title="${U.esc(w.msg)}">${txt}</span>
-      <button class="${asked ? 'sent' : ''}" data-adjust="${w.b.id}" data-prev="${w.a.id}" ${asked ? 'disabled' : ''}>${asked ? `${Icon.svg('check', 14)} ${U.esc(name)} 확인 중` : '비서에게 조정'}</button></div></div>`;
+      <button class="${stage === 'seen' ? 'sent' : stage === 'asked' ? 'asked' : ''}" data-adjust="${w.b.id}" data-prev="${w.a.id}" ${stage !== 'none' ? 'disabled' : ''}>${label}</button></div></div>`;
   },
 
   rowPast(s) {

@@ -405,3 +405,7 @@ nav.tabs .mic-tab > span:last-child { transform: translateY(8px); }
 nav.tabs { padding-bottom: max(18px, calc(var(--sab, env(safe-area-inset-bottom)) - 4px)); }
 nav.tabs .mic-tab .mic { top: -18px; }
 nav.tabs .mic-tab > span:last-child { transform: translateY(16px); }
+
+/* 조정 단계: 요청함(회색) → 비서 확인 중(초록) → 조정됨 */
+.tl-gap.conflict button.asked { background: #fff; color: #8E2F1E; border: 1px solid #E3B7AC; opacity: 1; }
+.tl-gap.move .adj { margin-left: 6px; color: var(--ok); font-weight: 700; display: inline-flex; align-items: center; gap: 2px; }
