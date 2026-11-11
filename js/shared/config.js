@@ -11,7 +11,8 @@
   const APP = 'https://ktj8824-stack.github.io/ceoplanner-app/';  // CEO 앱 (ceoplanner-app 저장소)
   const WEB = 'https://ktj8824-stack.github.io/ceoplanner-web/';  // 비서 웹 (ceoplanner-web 저장소)
   const isDev = ['localhost', '127.0.0.1', ''].includes(location.hostname) || location.protocol === 'file:';
-  const DEV_SECRETARY = WEB;   // 개발 PC의 비서 웹 파일 (분리본에서는 tools/package_split.cjs 가 맞게 바꿔 씀)
+  const DEV_SECRETARY = WEB;
+  const DEV_DRIVER = './driver.html';         // 기사님 배차표 (대표 앱 저장소에 들어 있음)   // 개발 PC의 비서 웹 파일 (분리본에서는 tools/package_split.cjs 가 맞게 바꿔 씀)
   window.CEOP_CONFIG = Object.freeze({
     SUPABASE_URL: '',
     SUPABASE_KEY: '', // sb_publishable_... 키만
@@ -21,5 +22,6 @@
     LOGIN_DOMAIN: 'ceoplanner.invalid', // 발급 아이디 kim → kim@ceoplanner.invalid (스스로 가입 · 카카오/구글 없음)
     APP_URL: isDev ? './index.html' : APP,
     SECRETARY_URL: isDev ? DEV_SECRETARY : WEB,
+    DRIVER_URL: isDev ? DEV_DRIVER : APP + 'driver.html',   // 배차 문자에 넣는 기사님 화면 주소
   });
 })();

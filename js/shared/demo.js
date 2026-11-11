@@ -28,6 +28,24 @@ const Demo = {
       { loginId: 'park', name: p.driverName || '박기사', role: 'driver', phone: p.driverPhone || '' },
     ];
   },
+  /** 지난 3주 기록 — 실제 출발·도착 시각과 식사 평가가 있는 일정 */
+  history(t, S) {
+    const at = (d, hm) => U.at(d, hm).toISOString();
+    const trip = (n, depart, min, extra = {}) => { const d = U.addDays(t, -n);
+      return S({ title: '한빛전자 실무 미팅', category: 'external', date: d, start: '10:00', end: '11:00', location: '한빛전자 삼성동 사옥', origin: '본사', mode: 'driver', travelMin: 35, ackAt: at(d, '08:00'),
+        actual: { departAt: at(d, depart), arriveAt: U.addMin(U.at(d, depart), min).toISOString() }, ...extra }); };
+    const meal = (n, title, place, rating, b = {}) => { const d = U.addDays(t, -n);
+      return S({ title, category: 'dinner', date: d, start: '12:00', end: '13:30', location: place, mode: 'driver', travelMin: 25, ackAt: at(d, '08:00'), actual: { rating }, briefing: b }); };
+    return [
+      trip(15, '09:05', 40), trip(9, '09:03', 45), trip(4, '09:08', 41),
+      meal(13, '그린벤처스 점심', '광화문 한정식 소담', 'good', { who: '최서연 상무', company: '그린벤처스' }),
+      meal(11, '대한건설 오찬', '청담 스시 오마카세', 'bad', { who: '윤태식 회장', company: '대한건설' }),
+      meal(7, '한빛전자 점심', '광화문 한정식 소담', 'good', { who: '정민호 부사장', company: '한빛전자' }),
+      meal(5, '협력사 점심', '여의도 중식당 루이', 'ok', { who: '박지훈 대표', company: '루이테크' }),
+      meal(2, '이사회 오찬', '삼청동 이탈리안 산마리노', 'good', { who: '사외이사 3명', company: '' }),
+    ];
+  },
+
   build() {
     const t = U.today(), d1 = U.addDays(t, 1), d2 = U.addDays(t, 2);
     const S = (o) => ({ id: U.uid(), visibility: 'normal', bufferMin: 10, status: 'scheduled', ackAt: null, briefing: {}, createdBy: 'secretary', ...o });
@@ -44,6 +62,8 @@ const Demo = {
             briefing: { who: '윤태식 회장 외 2명', company: '대한건설', purpose: '관계 유지', notes: '동반자: 윤태식 회장, 한상우 대표, 김대표', bring: '골프백 차량 적재 확인' } }),
         S({ title: '부산 지사 방문', category: 'trip', date: d2, start: '11:00', end: '17:00', location: '부산 지사', mode: 'train', travelMin: 25,
             trip: { station: '서울역', departTime: '08:00', arriveTime: '10:30', accessMin: 30, accessMode: 'driver' } }),
+        // 지난 기록 (학습 · 추천 시연용): 본사 → 한빛전자 실제 이동 40·45·41분, 식사 장소 평가
+        ...this.history(t, S),
       ],
       company: this.company(),
       notices: this.notices(),

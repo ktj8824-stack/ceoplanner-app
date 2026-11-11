@@ -147,6 +147,61 @@ const Store = {
     }
   },
 
+  /** 여러 일정을 한 번에 저장 (반복 일정 등록 · 이후 반복 일정 함께 바꾸기) */
+  async upsertMany(list) {
+    if (!list.length) return [];
+    for (const s of list) { if (!s.id) s.id = U.uid(); if (!s.createdBy) s.createdBy = this.role; if (this.role === 'secretary') s.ackAt = null; }
+    if (this.mode === 'supabase') {
+      const { error } = await this.client.from('ceo_schedules').upsert(list.map(s => this._toRow(s)));
+      if (error) throw error;
+      await this._reload();
+    } else {
+      for (const s of list) {
+        const i = this.data.schedules.findIndex(x => x.id === s.id);
+        if (i >= 0) this.data.schedules[i] = { ...this.data.schedules[i], ...s }; else this.data.schedules.push(s);
+      }
+      this._saveDemo();
+    }
+    return list;
+  },
+
+  async removeMany(ids) {
+    if (!ids.length) return;
+    if (this.mode === 'supabase') {
+      const { error } = await this.client.from('ceo_schedules').delete().in('id', ids);
+      if (error) throw error;
+      await this._reload();
+    } else {
+      this.data.schedules = this.data.schedules.filter(s => !ids.includes(s.id));
+      this._saveDemo();
+    }
+  },
+
+  /** 실제 기록 더하기 — { departAt, arriveAt, rating } (대표 앱에서. 확인 상태는 그대로) */
+  async setActual(id, fields) {
+    const s = this.data.schedules.find(x => x.id === id); if (!s) return;
+    const actual = { ...(s.actual || {}), ...fields };
+    if (this.mode === 'supabase') {
+      const { error } = await this.client.from('ceo_schedules').update({ actual }).eq('id', id);
+      if (error) throw error;
+      await this._reload();
+    } else { s.actual = actual; this._saveDemo(); }
+  },
+
+  /** 대표가 여러 일정을 한 번에 확인 (브리핑 '모두 확인') */
+  async ackMany(ids) {
+    if (!ids.length) return;
+    const at = new Date().toISOString();
+    if (this.mode === 'supabase') {
+      const { error } = await this.client.from('ceo_schedules').update({ ack_at: at }).in('id', ids);
+      if (error) throw error;
+      await this._reload();
+    } else {
+      this.data.schedules.forEach(s => { if (ids.includes(s.id)) s.ackAt = at; });
+      this._saveDemo();
+    }
+  },
+
   /** 확인 상태는 건드리지 않고 일부 값만 바꿈 (예: 다시 알린 시각) */
   async patch(id, fields) {
     if (this.mode === 'supabase') {
@@ -176,6 +231,7 @@ const Store = {
 
   /** 대표 개인 일정 제목이 문장에 들어 있으면 '개인 일정'으로 바꿈 (비서톡으로 새지 않게 — 모든 메시지가 여길 지남) */
   maskPrivate(body) {
+    if (this.role !== 'ceo') return body;   // 비서·기사는 개인 일정 이름을 모름 ('바쁨'만 보임)
     const titles = this.data.schedules.filter(s => s.visibility === 'private' && s.title && s.title.length >= 2).map(s => s.title).sort((a, b) => b.length - a.length);
     return titles.reduce((t, title) => t.split(title).join('개인 일정'), body);
   },
@@ -284,7 +340,7 @@ const Store = {
     if (me.error) throw me.error;
     if (!me.data) throw new Error('CEO플래너 계정이 아니에요. 회사에서 받은 아이디로 로그인해 주세요.');
     if (me.data.role !== this.role) {
-      const where = { ceo: '대표 앱', secretary: '비서 웹', driver: '기사 화면(준비 중)' }[me.data.role];
+      const where = { ceo: '대표 앱', secretary: '비서 웹', driver: '기사님 배차표' }[me.data.role];
       throw new Error(`이 아이디는 ${where}용이에요.`);
     }
     this.companyId = me.data.company_id; this.myLogin = me.data.login_id;
@@ -304,6 +360,7 @@ const Store = {
 
   async _reload() {
     if (!this.ceoId) { this.data = this._empty(); return; }
+    if (this.role === 'driver') return this._reloadDriver();
     // schedule_feed 뷰: 비서에게는 개인 일정을 서버에서 '바쁨'으로 가려서 내려줌
     const [sch, msg, prof, mem, co, ntc, pay] = await Promise.all([
       this.client.from('ceo_schedule_feed').select('*').eq('ceo_id', this.ceoId),
@@ -327,6 +384,18 @@ const Store = {
     };
   },
 
+  /** 기사님: 기사 차량 일정만 (브리핑·개인 일정 없음) + 연락처. 메시지는 보내기만 */
+  async _reloadDriver() {
+    const [sch, prof] = await Promise.all([
+      this.client.from('ceo_driver_feed').select('*').eq('ceo_id', this.ceoId),
+      this.client.from('ceo_profiles').select('name, settings').eq('id', this.ceoId).single(),
+    ]);
+    if (sch.error) throw sch.error;
+    const st = (prof.data && prof.data.settings) || {};
+    this.data = { ...this._empty(), schedules: (sch.data || []).map(r => this._fromRow({ visibility: 'normal', briefing: {}, ...r })),
+      profile: { name: prof.data?.name, secretaryName: st.secretaryName, secretaryPhone: st.secretaryPhone, driverName: st.driverName, prepMin: st.prepMin } };
+  },
+
   _toRow(s) {
     return {
       id: s.id, ceo_id: this.ceoId, title: s.title, category: s.category, date: s.date,
@@ -334,7 +403,7 @@ const Store = {
       mode: s.mode || 'none', travel_min: s.travelMin || 0, buffer_min: s.bufferMin ?? 10,
       visibility: s.visibility || 'normal', trip: s.trip || null, briefing: s.briefing || {},
       status: s.status || 'scheduled', ack_at: s.ackAt || null, created_role: s.createdBy || this.role,
-      origin: s.origin || null, nudged_at: s.nudgedAt || null,
+      origin: s.origin || null, nudged_at: s.nudgedAt || null, actual: s.actual || {}, series: s.series || null,
     };
   },
   _fromRow(r) {
@@ -344,6 +413,7 @@ const Store = {
       location: r.location || '', mode: r.mode, travelMin: r.travel_min, bufferMin: r.buffer_min,
       visibility: r.visibility, trip: r.trip, briefing: r.briefing || {}, status: r.status,
       ackAt: r.ack_at, createdBy: r.created_role, masked: !!r.masked, origin: r.origin || '', nudgedAt: r.nudged_at || null,
+      actual: r.actual || {}, series: r.series || null,
     };
   },
 };

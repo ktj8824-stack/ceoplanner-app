@@ -89,19 +89,58 @@ const App = {
   },
 
   /** '출발했어요'를 누른 시각 (기기에 저장, 일정 id별) */
-  departedAt(id) { try { return (JSON.parse(localStorage.getItem('CEOP_DEPARTED') || '{}'))[id] || null; } catch { return null; } },
-  markDeparted(id) {
-    try { const m = JSON.parse(localStorage.getItem('CEOP_DEPARTED') || '{}'); m[id] = new Date().toISOString();
-      const keys = Object.keys(m); if (keys.length > 200) keys.slice(0, keys.length - 200).forEach(k => delete m[k]);
-      localStorage.setItem('CEOP_DEPARTED', JSON.stringify(m)); } catch { /* */ }
-  },
+  /** 실제 출발·도착 기록 (대표가 누른 것 + 기사님이 보낸 상태) — 쌓이면 이동 시간을 배워요 */
+  actualOf(s) { return Learn.actual(s, Store.messages()); },
+  departedAt(id) { const s = Store.get(id); return s ? this.actualOf(s).departAt || null : null; },
 
   /** 이 일정에 대해 대표가 이미 보낸 요청이 있는지 (조정 요청 등) */
   sentAbout(id, word) { return Store.messages().some(m => m.from === 'ceo' && m.ref === id && m.body.includes(word)); },
 
   // ───────── 홈 ─────────
   home() {
-    return this.hero() + `<div class="body">${window.AutoNav && AutoNav.promoHtml ? AutoNav.promoHtml() : ''}${this.view === 'timeline' ? this.dayList() : this.calendar()}</div>`;
+    return this.hero() + `<div class="body">${this.briefCard()}${this.rateCard()}${window.AutoNav && AutoNav.promoHtml ? AutoNav.promoHtml() : ''}${this.view === 'timeline' ? this.dayList() : this.calendar()}</div>`;
+  },
+
+  /** 기사님 최근 상태 한 줄 (대기 중 · 출발 · 현장 도착) */
+  driverLine(s) {
+    if (s.mode !== 'driver' && !(s.trip && s.trip.accessMode === 'driver')) return '';
+    const st = Learn.driverStatus(s, Store.messages());
+    if (!st) return '';
+    const name = U.esc(this.profile().driverName || '기사');
+    const txt = { wait: '대기 중', depart: '출발했어요', arrive: '현장 도착' }[st.kind];
+    return `<p class="drv-line ${st.kind}">${Icon.svg('car', 15)} ${name}님 ${txt} · ${U.hm(new Date(st.at))}</p>`;
+  },
+
+  /** 비서가 보낸 브리핑 — 확인 대기 일정이 남아 있으면 '모두 확인' */
+  latestBrief() {
+    const m = [...Store.messages()].reverse().find(x => x.from === 'secretary' && String(x.ref || '').startsWith('brief:'));
+    if (!m) return null;
+    const ymd = m.ref.slice(6);
+    if (ymd < U.today()) return null;
+    const pending = Store.byDate(ymd).filter(x => x.status !== 'cancelled' && x.visibility !== 'private' && !x.ackAt);
+    return { m, ymd, pending, total: Store.byDate(ymd).filter(x => x.status !== 'cancelled').length };
+  },
+  briefCard() {
+    const b = this.latestBrief();
+    if (!b || !b.pending.length) return '';
+    const rel = b.ymd === U.today() ? '오늘' : b.ymd === U.addDays(U.today(), 1) ? '내일' : this.dateTitle(b.ymd);
+    return `<section class="brief-card"><div class="bc-top"><span class="ico">${Icon.svg('file', 18)}</span>
+        <span class="t"><b>${rel} 브리핑이 왔어요</b><small>${U.esc(this.profile().secretaryName || '비서')} · ${U.hm(new Date(b.m.at))} · 일정 ${b.total}건 · 확인 대기 ${b.pending.length}건</small></span></div>
+      <div class="bc-acts"><button class="btn" data-briefview>내용 보기</button><button class="btn primary" data-ackall="${b.ymd}">${Icon.svg('check', 16)} 모두 확인</button></div></section>`;
+  },
+
+  /** 끝난 식사 일정 평가 — 쌓이면 비서 등록 창에서 '좋았던 곳'을 추천 */
+  rateTarget() {
+    const now = new Date(), from = U.addDays(U.today(), -1);
+    return Store.list().filter(s => s.category === 'dinner' && s.location && s.status !== 'cancelled' && s.date >= from && !(s.actual && s.actual.rating)
+      && U.addMin(U.at(s.date, s.end || s.start), 0) < now).sort((a, b) => (b.date + b.end).localeCompare(a.date + a.end))[0] || null;
+  },
+  rateCard() {
+    const s = this.rateTarget();
+    if (!s) return '';
+    return `<section class="rate-card"><button class="rc-x" data-rate="${s.id}" data-v="skip" aria-label="평가 건너뛰기">${Icon.svg('x', 16)}</button>
+      <p><b>${U.esc(s.location)}</b> 어떠셨어요?<small>${U.esc(s.title)} · ${s.date === U.today() ? '오늘' : '어제'} ${s.start} · 다음 식사 장소 고를 때 참고해요</small></p>
+      <div class="rc-acts">${Object.entries(Learn.RATING).map(([k, l]) => `<button class="btn ${k === 'good' ? 'primary' : ''}" data-rate="${s.id}" data-v="${k}">${l}</button>`).join('')}</div></section>`;
   },
 
   greet() { const h = new Date().getHours(); return h < 11 ? '좋은 아침이에요' : h < 18 ? '좋은 오후예요' : '오늘도 수고하셨어요'; },
@@ -130,7 +169,9 @@ const App = {
     const departed = this.departedAt(s.id);
     const leaveIdx = steps.findIndex(st => st.kind === 'leave');
     const overdue = leaveIdx >= 0 && !departed && steps[leaveIdx].at <= now && pl.startAt > now ? U.diffMin(now, steps[leaveIdx].at) : 0;
-    const cur = overdue ? leaveIdx : steps.findIndex(st => st.at > now);   // 지금 기다리는 단계 (-1 = 모두 지남 → 진행 중)
+    // 출발을 기록했으면(대표 또는 기사님) 출발 단계까지는 끝난 것으로
+    let cur = overdue ? leaveIdx : steps.findIndex(st => st.at > now);   // 지금 기다리는 단계 (-1 = 모두 지남 → 진행 중)
+    if (departed && leaveIdx >= 0 && cur >= 0 && cur <= leaveIdx) cur = leaveIdx + 1 < steps.length ? leaveIdx + 1 : -1;
     const target = cur >= 0 ? steps[cur] : null;
     const left = target ? U.diffMin(target.at, now) : 0;
     const pill = overdue ? `출발 ${U.durLabel(overdue)} 지남` : !target ? `${s.end}까지 진행 중` : left < 60 ? `${target.label} ${left}분 전` : `${target.label}까지 ${U.durLabel(left)}`;
@@ -147,15 +188,18 @@ const App = {
     if (s.mode === 'driver' && p.driverPhone) acts.push(`<a class="na light" href="${U.telLink(p.driverPhone)}">${Icon.svg('phone', 16)} ${U.esc(p.driverName || '기사')}님</a>`);
     else if (s.briefing && s.briefing.who) acts.push(`<button class="na light" data-brief="${s.id}">${Icon.svg('file', 16)} 미팅 브리핑</button>`);
     else if (s.location) acts.push(`<a class="na light" href="${U.tmapLink(s.location)}">${Icon.svg('nav', 16)} 길안내</a>`);
+    const act = this.actualOf(s);
+    const canArrive = !overdue && departed && !act.arriveAt && s.mode !== 'none' && !mode.trip && pl.startAt > now;
     if (overdue) acts.unshift(`<button class="na light" data-departed="${s.id}">${Icon.svg('check', 16)} 출발했어요</button>`);
+    else if (canArrive) acts.unshift(`<button class="na light" data-arrived="${s.id}">${Icon.svg('check', 16)} 도착했어요</button>`);
     if (!priv) acts.push(`<button class="na" data-late="${s.id}">10분 늦어요</button>`);
-    if (s.mode === 'driver' && p.driverPhone && s.briefing && s.briefing.who) acts.push(`<button class="na" data-brief="${s.id}">${Icon.svg('file', 16)} 브리핑</button>`);
+    if (!overdue && !canArrive && s.mode === 'driver' && p.driverPhone && s.briefing && s.briefing.who) acts.push(`<button class="na" data-brief="${s.id}">${Icon.svg('file', 16)} 브리핑</button>`);
     const ack = !priv && !s.ackAt ? `<button class="next-ack" data-ack="${s.id}">${Icon.svg('check', 16)} 이 일정 확인했어요</button>` : '';
     return `<header class="hero">${top}
       <div class="next-card">
         <div class="nc-head"><div><small>${headLabel} ${s.start}</small><b>${priv ? Icon.svg('lock', 16) + ' ' : ''}${U.esc(s.title)}</b>${sub ? `<span>${sub}</span>` : ''}</div>
           <span class="pill ${overdue ? 'late' : ''}">${pill}</span></div>
-        ${stepHtml}
+        ${stepHtml}${this.driverLine(s)}
         <div class="nc-acts n${acts.length}">${acts.join('')}</div>${ack}
       </div></header>`;
   },
@@ -482,6 +526,17 @@ const App = {
     else f.q.focus();
   },
 
+  async ackAll(ymd) {
+    const ids = Store.byDate(ymd).filter(x => x.status !== 'cancelled' && x.visibility !== 'private' && !x.ackAt).map(x => x.id);
+    if (!ids.length) return;
+    try {
+      await Store.ackMany(ids);
+      const rel = ymd === U.today() ? '오늘' : ymd === U.addDays(U.today(), 1) ? '내일' : this.dateTitle(ymd);
+      await Store.send(`${rel} 일정 ${ids.length}건 모두 확인했어요.`, { ref: 'brief:' + ymd });
+      U.toast(`${ids.length}건 모두 확인했어요. 비서에게 전달됐어요`);
+    } catch (err) { U.toast('확인하지 못했어요: ' + (err.message || err)); }
+  },
+
   async askNotif() {
     if (this.notifState() === 'denied') return this.go('me');
     await Notification.requestPermission();
@@ -497,7 +552,11 @@ const App = {
     on('[data-pick]', el => { this.day = el.dataset.pick; this.view = 'timeline'; this.openId = null; this.render(); });
     on('[data-open]', el => { this.openId = el.dataset.open; this.render(); });
     on('[data-fold]', () => { this.openId = null; this.render(); });
-    on('[data-departed]', el => { this.markDeparted(el.dataset.departed); U.toast('출발을 기록했어요'); this.render(); });
+    on('[data-departed]', safe(async el => { await Store.setActual(el.dataset.departed, { departAt: new Date().toISOString() }); U.toast('출발을 기록했어요'); }));
+    on('[data-arrived]', safe(async el => { await Store.setActual(el.dataset.arrived, { arriveAt: new Date().toISOString() }); U.toast('도착을 기록했어요'); }));
+    on('[data-rate]', safe(async el => { await Store.setActual(el.dataset.rate, { rating: el.dataset.v, ratedAt: new Date().toISOString() }); if (el.dataset.v !== 'skip') U.toast('기억해 둘게요'); }));
+    on('[data-briefview]', () => { const b = this.latestBrief(); if (b) this.modal(`<h3>${U.esc(this.profile().secretaryName || '비서')} 브리핑</h3><p class="brief-text">${U.esc(b.m.body).replace(/\n/g, '<br>')}</p><div class="modal-foot"><button class="btn" data-close>닫기</button><button class="btn primary" data-close data-ackall="${b.ymd}">모두 확인</button></div>`).querySelector('[data-ackall]').addEventListener('click', () => this.ackAll(b.ymd)); });
+    on('[data-ackall]', safe(async el => this.ackAll(el.dataset.ackall)));
     on('[data-ack]', safe(async el => { await Store.ack(el.dataset.ack); U.toast('확인했어요. 비서에게 전달됐어요'); }));
     on('[data-brief]', el => this.briefing(el.dataset.brief));
     on('[data-late]', safe(async el => { const s = Store.get(el.dataset.late); await Store.send(`'${s.title}' 10분 정도 늦을 것 같아요.`, { ref: s.id }); U.toast('비서에게 보냈어요'); }));

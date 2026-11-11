@@ -1,0 +1,37 @@
+/* =========================================
+   CEO플래너 — 기사님 배차표 (운전 중에도 보기 쉽게: 큰 글씨 · 큰 버튼)
+   ========================================= */
+body.driver { background: var(--porcelain, #F4F5F7); }
+.drv-head { background: var(--navy); color: #fff; padding: calc(16px + env(safe-area-inset-top)) 18px 18px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.drv-head small { color: #C3CBD6; font-size: 14px; }
+.drv-head h1 { margin: 4px 0 0; font-size: 24px; font-weight: 800; }
+.drv-call { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; border-radius: 12px; background: #fff; color: var(--navy); font-weight: 700; text-decoration: none; }
+.drv-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 16px 0; }
+.drv-tabs button { height: 48px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-size: 16px; font-weight: 700; color: var(--ink); }
+.drv-tabs button small { color: var(--slate); font-weight: 600; }
+.drv-tabs button.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.drv-tabs button.on small { color: #C3CBD6; }
+.drv-list { padding: 12px 16px; display: grid; gap: 12px; }
+.drv-card { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 16px; }
+.drv-card.past { opacity: .6; }
+.dc-top { display: flex; justify-content: space-between; align-items: flex-start; }
+.dc-call small { display: block; font-size: 14px; color: var(--slate); font-weight: 600; }
+.dc-call b { font-size: 34px; font-weight: 800; color: var(--ink); line-height: 1.1; }
+.dc-pill { background: var(--line-2); color: var(--ink-2, #33415A); border-radius: 999px; padding: 6px 12px; font-size: 14px; font-weight: 700; }
+.dc-pill.soon { background: var(--brass-ink); color: #fff; }
+.dc-route { display: grid; grid-template-columns: 76px 1fr; gap: 6px 10px; margin: 14px 0 0; font-size: 16px; }
+.dc-route dt { color: var(--slate); font-weight: 600; }
+.dc-route dd { margin: 0; color: var(--ink); }
+.dc-steps { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 0; margin: 16px 0 0; }
+.dc-steps li { display: grid; justify-items: center; gap: 4px; font-size: 13px; color: var(--slate); text-align: center; }
+.dc-steps li i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; color: #fff; }
+.dc-steps li.done i { background: var(--ok); border-color: var(--ok); }
+.dc-steps li.now i { border-color: var(--navy); }
+.dc-steps li.now span { color: var(--ink); font-weight: 700; }
+.dc-steps li b { font-size: 13px; color: var(--ok); min-height: 16px; }
+.dc-acts { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 14px; align-items: center; }
+.dc-acts .btn { height: 52px; font-size: 16px; }
+.dc-acts .btn.big { font-size: 17px; font-weight: 800; }
+.dc-done { margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ok); font-weight: 700; }
+.drv-empty { padding: 40px 16px; text-align: center; color: var(--slate); }
+.drv-foot { text-align: center; font-size: 13px; color: var(--slate); padding: 4px 16px 28px; }

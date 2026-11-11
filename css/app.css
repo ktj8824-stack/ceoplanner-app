@@ -447,3 +447,26 @@ nav.tabs .mic-tab > span:last-child { transform: translateY(16px); }
 .anp-btn { flex: none; height: 30px; padding: 0 10px; border-radius: 9px; background: #fff; color: var(--navy); font-size: 13px; font-weight: 700; display: grid; place-items: center; }
 .anp-x { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 30px; height: 30px; border: 0; background: transparent; color: #8A96A8; font-size: 14px; cursor: pointer; }
 .an-g-guide { display: flex; width: 100%; margin-top: 14px; text-decoration: none; }
+
+/* 기사님 상태 한 줄 (대기 중 · 출발 · 현장 도착) */
+.drv-line { margin: 10px 0 0; display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: #C3CBD6; }
+.drv-line.wait { color: #E9D7B0; } .drv-line.arrive { color: #9FD3B8; }
+
+/* 비서 브리핑 카드 — '모두 확인' */
+.brief-card { background: var(--surface); border: 1px solid var(--brass); border-radius: 18px; padding: 14px; margin: 0 0 12px; }
+.bc-top { display: flex; gap: 10px; align-items: center; }
+.bc-top .ico { flex: none; width: 36px; height: 36px; border-radius: 11px; background: var(--brass-soft); color: var(--brass-ink, #7A5F2E); display: grid; place-items: center; }
+.bc-top .t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bc-top .t b { font-size: 16px; font-weight: 800; color: var(--ink); }
+.bc-top .t small { font-size: 13px; color: var(--slate); }
+.bc-acts { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; margin-top: 12px; }
+.bc-acts .btn { height: 44px; font-size: 15px; }
+.brief-text { font-size: 15px; line-height: 1.6; white-space: normal; margin: 8px 0 0; }
+
+/* 식사 평가 카드 */
+.rate-card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 14px 12px; margin: 0 0 12px; }
+.rate-card p { margin: 0 28px 0 0; font-size: 15.5px; color: var(--ink); line-height: 1.4; }
+.rate-card p small { display: block; margin-top: 3px; font-size: 13px; color: var(--slate); }
+.rc-acts { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 8px; margin-top: 12px; }
+.rc-acts .btn { height: 44px; font-size: 15px; }
+.rc-x { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border: 0; background: transparent; color: var(--slate); display: grid; place-items: center; }
