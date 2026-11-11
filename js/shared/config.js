@@ -11,6 +11,7 @@
   const APP = 'https://ktj8824-stack.github.io/ceoplanner-app/';  // CEO 앱 (ceoplanner-app 저장소)
   const WEB = 'https://ktj8824-stack.github.io/ceoplanner-web/';  // 비서 웹 (ceoplanner-web 저장소)
   const isDev = ['localhost', '127.0.0.1', ''].includes(location.hostname) || location.protocol === 'file:';
+  const DEV_SECRETARY = WEB;   // 개발 PC의 비서 웹 파일 (분리본에서는 tools/package_split.cjs 가 맞게 바꿔 씀)
   window.CEOP_CONFIG = Object.freeze({
     SUPABASE_URL: '',
     SUPABASE_KEY: '', // sb_publishable_... 키만
@@ -19,6 +20,6 @@
     PAY_URL: APP + 'payment.html',   // 아이폰 앱에서는 사파리로 이 결제 화면을 열어요
     LOGIN_DOMAIN: 'ceoplanner.invalid', // 발급 아이디 kim → kim@ceoplanner.invalid (스스로 가입 · 카카오/구글 없음)
     APP_URL: isDev ? './index.html' : APP,
-    SECRETARY_URL: isDev ? './secretary.html' : WEB,
+    SECRETARY_URL: isDev ? DEV_SECRETARY : WEB,
   });
 })();

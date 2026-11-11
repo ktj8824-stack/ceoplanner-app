@@ -58,13 +58,14 @@ const Store = {
   messages() { return [...this.data.messages].sort((a, b) => a.at.localeCompare(b.at)); },
   /** 회사 구독 정보 { plan, trialUntil, paidUntil, extraExecs } · 결제 내역 */
   company() {
-    if (!this.data.company && this.mode === 'demo') { this.data.company = Demo.company(); }
+    if (!this.data.company && this.mode === 'demo') { this.data.company = Demo.company(); this._persistDemo(); }   // 한 번 정하면 저장 (열 때마다 다시 계산 X)
     return this.data.company;
   },
   payments() { return this.data.payments || []; },
   /** 공지사항 (새 글 먼저, 고정 글은 맨 위) */
   notices() {
-    const list = this.data.notices || (this.mode === 'demo' ? Demo.notices() : []);
+    if (!this.data.notices && this.mode === 'demo') { this.data.notices = Demo.notices(); this._persistDemo(); }
+    const list = this.data.notices || [];
     return [...list].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.at.localeCompare(a.at));
   },
   /** 데모 전용: 회사 구독 정보 바꾸기 */
@@ -173,9 +174,15 @@ const Store = {
     }
   },
 
+  /** 대표 개인 일정 제목이 문장에 들어 있으면 '개인 일정'으로 바꿈 (비서톡으로 새지 않게 — 모든 메시지가 여길 지남) */
+  maskPrivate(body) {
+    const titles = this.data.schedules.filter(s => s.visibility === 'private' && s.title && s.title.length >= 2).map(s => s.title).sort((a, b) => b.length - a.length);
+    return titles.reduce((t, title) => t.split(title).join('개인 일정'), body);
+  },
+
   /** ref: 관련 일정 id (비서 웹에서 '일정 열기'로 바로 이동) */
   async send(body, { urgent = false, ref = null } = {}) {
-    const msg = { id: U.uid(), from: this.role, body: String(body).slice(0, 1000), urgent, ref, at: new Date().toISOString() };
+    const msg = { id: U.uid(), from: this.role, body: this.maskPrivate(String(body)).slice(0, 1000), urgent, ref, at: new Date().toISOString() };
     if (this.mode === 'supabase') {
       const { error } = await this.client.from('ceo_messages').insert({ ceo_id: this.ceoId, sender_id: this.user.id, sender_role: this.role, body: msg.body, urgent, ref_id: ref });
       if (error) throw error;
@@ -190,7 +197,7 @@ const Store = {
     this.data.profile = { ...this.data.profile, ...patch };
     if (this.mode === 'supabase') {
       if (this.role !== 'ceo') return; // 대표 설정은 대표만 바꿈
-      const { error } = await this.client.from('ceo_profiles').update({ settings: Object.fromEntries(Object.entries(this.data.profile).filter(([k]) => k !== 'name')) }).eq('id', this.ceoId);
+      const { error } = await this.client.from('ceo_profiles').update({ ...(patch.name ? { name: String(patch.name).trim().slice(0, 40) } : {}), settings: Object.fromEntries(Object.entries(this.data.profile).filter(([k]) => k !== 'name')) }).eq('id', this.ceoId);
       if (error) throw error;
     } else this._saveDemo();
   },
@@ -251,7 +258,8 @@ const Store = {
       localStorage.setItem(this.KEY, JSON.stringify(this.data));
     }
   },
-  _saveDemo() { localStorage.setItem(this.KEY, JSON.stringify(this.data)); this._emit(); },
+  _saveDemo() { this._persistDemo(); this._emit(); },
+  _persistDemo() { try { localStorage.setItem(this.KEY, JSON.stringify(this.data)); } catch { /* 저장소 막힘 */ } },
 
   // ───────── Supabase 모드 ─────────
   /** 발급받은 아이디 → 내부 로그인 주소 (예: kim → kim@ceoplanner.invalid) */
@@ -297,7 +305,7 @@ const Store = {
   async _reload() {
     if (!this.ceoId) { this.data = this._empty(); return; }
     // schedule_feed 뷰: 비서에게는 개인 일정을 서버에서 '바쁨'으로 가려서 내려줌
-    const [sch, msg, prof, mem, co, pay, ntc] = await Promise.all([
+    const [sch, msg, prof, mem, co, ntc, pay] = await Promise.all([
       this.client.from('ceo_schedule_feed').select('*').eq('ceo_id', this.ceoId),
       this.client.from('ceo_messages').select('*').eq('ceo_id', this.ceoId).order('created_at', { ascending: true }).limit(300),
       this.client.from('ceo_profiles').select('name, settings').eq('id', this.ceoId).single(),

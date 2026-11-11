@@ -5,7 +5,8 @@
 const Demo = {
   /** 데모 공지사항 */
   notices() {
-    const day = n => U.addDays(U.today(), -n) + 'T00:00:00.000Z';   // 날짜 단위로 고정 (읽을 때마다 바뀌지 않게)
+    // 데모를 처음 만들 때 한 번만 정해 저장 (매일 '새 글'로 바뀌지 않게) · 한국 시간 오전 9시
+    const day = n => U.at(U.addDays(U.today(), -n), '09:00').toISOString();
     return [
       { id: 'n1', pinned: true, at: day(3), title: 'CEO플래너에 오신 걸 환영해요',
         body: '비서님이 일정을 넣으면 대표님 앱에 바로 보여요.\n출발 · 기사 호출 시간은 앱이 거꾸로 계산해 알려 드려요.\n일정이 겹치면 홈 화면에 빨간 줄로 표시돼요.' },
@@ -44,6 +45,8 @@ const Demo = {
         S({ title: '부산 지사 방문', category: 'trip', date: d2, start: '11:00', end: '17:00', location: '부산 지사', mode: 'train', travelMin: 25,
             trip: { station: '서울역', departTime: '08:00', arriveTime: '10:30', accessMin: 30, accessMode: 'driver' } }),
       ],
+      company: this.company(),
+      notices: this.notices(),
       messages: [
         { id: U.uid(), from: 'secretary', body: '대표님, 내일 라운딩은 새벽 5시 20분 출발입니다. 기사님께도 전달했습니다.', urgent: false, at: new Date(Date.now() - 3600e3).toISOString() },
       ],

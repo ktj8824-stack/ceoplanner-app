@@ -410,6 +410,12 @@ nav.tabs .mic-tab > span:last-child { transform: translateY(16px); }
 .tl-gap.conflict button.asked { background: #fff; color: #8E2F1E; border: 1px solid #E3B7AC; opacity: 1; }
 .tl-gap.move .adj { margin-left: 6px; color: var(--ok); font-weight: 700; display: inline-flex; align-items: center; gap: 2px; }
 
+/* 출발 시각이 지났는데 '출발했어요'를 안 눌렀을 때 · 내일 일정인데 오늘 밤 단계 */
+.nc-head .pill.late { background: var(--signal, #C2410C); color: #fff; }
+.steps li.now.late i { background: var(--signal, #C2410C); border-color: var(--signal, #C2410C); box-shadow: 0 0 0 5px rgba(194, 65, 12, .35); }
+.steps li b small { display: block; font-size: 11px; font-weight: 700; color: #C9B48A; line-height: 1.1; }
+.tl-gap.conflict .cg small.muted { font-size: 12px; color: #8E2F1E; opacity: .8; }
+
 /* 차에 타면 자동 길안내 */
 #an-bg { position: fixed; inset: 0; z-index: 9999; background: rgba(15, 23, 42, .55); display: flex; align-items: flex-end; justify-content: center; padding: 16px 16px calc(var(--sab, env(safe-area-inset-bottom, 0px)) + 24px); }
 #an-box { width: 100%; max-width: 420px; background: var(--surface, #fff); border-radius: 22px; padding: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, .25); }

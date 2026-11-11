@@ -73,6 +73,8 @@ const Plan = {
   },
 
   /** 결제 화면 주소. 아이폰 앱(파일로 열림)에서는 사파리로 웹 결제 화면을 열어요 */
+  /** 아이폰 앱 데모에서는 결제 화면이 사파리로 열려 앱에 반영되지 않음 → 안내 한 줄 */
+  payNote() { return location.protocol === 'file:' && Store.mode === 'demo' ? '데모에서는 사파리 결제 화면만 보여요 (앱에는 반영되지 않아요)' : ''; },
   payUrl() {
     const from = Store.role === 'secretary' ? 'web' : 'app';
     if (location.protocol === 'file:') return CEOP_CONFIG.PAY_URL + '?from=app';

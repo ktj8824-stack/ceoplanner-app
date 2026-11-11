@@ -49,11 +49,12 @@
       const def = this.MODES[mode];
       const cat = this.CATEGORIES[s.category] || this.CATEGORIES.external;
       const startAt = U.at(s.date, s.start);
-      const endAt = U.at(s.date, s.end || s.start);
+      let endAt = U.at(s.date, s.end || s.start);
+      if (endAt < startAt) endAt = U.addMin(endAt, 24 * 60);   // 22:00–01:00 처럼 밤을 넘기는 일정
       const buffer = mode === 'none' ? 0 : Number(s.bufferMin ?? this.DEFAULT_BUFFER_MIN);
       const arriveBy = U.addMin(startAt, -cat.arriveEarlyMin);
       const items = [];
-      let leaveAt;
+      let leaveAt, warn = '';
 
       if (mode === 'none') {
         leaveAt = arriveBy;
@@ -69,8 +70,12 @@
         items.push({ at: stationAt, kind: 'wait', icon: '⏱️', title: marginLabel, detail: `${margin}분 전 도착` });
         items.push({ at: departAt, kind: 'move', icon: def.emoji, title: `${def.label} 출발`, detail: t.departTime || '' });
         if (t.arriveTime) {
-          const tripArr = U.at(s.date, t.arriveTime);
+          let tripArr = U.at(s.date, t.arriveTime);
+          if (tripArr < departAt) tripArr = U.addMin(tripArr, 24 * 60);   // 국제선 다음 날 도착
           items.push({ at: tripArr, kind: 'move', icon: '📍', title: '도착역·공항 도착', detail: s.travelMin ? `현장까지 ${U.durLabel(s.travelMin)}` : '' });
+          const reach = U.addMin(tripArr, Number(s.travelMin || 0));
+          const late = U.diffMin(reach, arriveBy);
+          if (late > 0) warn = `도착 후 현장까지 가면 ${U.hm(reach)}이라, 시작 전 도착 시각(${U.hm(arriveBy)})보다 ${late}분 늦어요`;
         }
       } else {
         const travel = Number(s.travelMin || 0) + (def.extraMin || 0);
@@ -97,7 +102,7 @@
       if (s.end && s.end !== s.start) items.push({ at: endAt, kind: 'end', icon: '✅', title: '종료', detail: '' });
 
       items.sort((a, b) => a.at - b.at);
-      return { arriveBy, leaveAt, driverCallAt, wakeAt, startAt, endAt, items };
+      return { arriveBy, leaveAt, driverCallAt, wakeAt, startAt, endAt, items, warn };
     },
 
     /** 하루 일정 전체 역산 (첫 이동 일정에 기상 시각을 붙임) */
@@ -118,7 +123,7 @@
      * 반환: [{ a, b, shortMin, msg }]
      */
     conflicts(list, opts = {}) {
-      const day = this.planDay(list, opts);
+      const day = list.map(s => ({ s, p: this.plan(s, opts) })).sort((a, b) => a.p.startAt - b.p.startAt);
       const out = [];
       for (let i = 1; i < day.length; i++) {
         const prev = day[i - 1], cur = day[i];
@@ -128,16 +133,29 @@
           : U.diffMin(prev.p.endAt, cur.p.startAt);
         if (short > 0) {
           const overlap = cur.p.startAt < prev.p.endAt;
+          const a = `'${prev.s.title}'`;
           out.push({
             a: prev.s, b: cur.s, shortMin: short,
             msg: overlap
-              ? `'${prev.s.title}'와 '${cur.s.title}' 시간이 겹칩니다`
-              : `'${prev.s.title}' 끝나고 '${cur.s.title}'까지 이동 시간이 ${short}분 부족합니다`,
+              ? `${a}${this.wa(prev.s.title)} '${cur.s.title}' 시간이 겹쳐요`
+              : `${a} 끝나고 '${cur.s.title}'까지 이동 시간이 ${short}분 부족해요`,
           });
         }
       }
       return out;
     },
+
+    /** 그날 경고 + 전날 밤 일정이 이어지는 경우까지 (전날 마지막 일정과 비교) */
+    conflictsOn(all, ymd, opts = {}) {
+      const live = all.filter(s => s.status !== 'cancelled');
+      const prev = live.filter(s => s.date === U.addDays(ymd, -1)).map(s => ({ s, p: this.plan(s, opts) })).sort((a, b) => b.p.endAt - a.p.endAt)[0];
+      const list = live.filter(s => s.date === ymd);
+      if (prev && prev.p.endAt > U.addMin(U.at(ymd, '00:00'), -4 * 60)) list.push(prev.s);   // 전날 20시 이후에 끝나는 일정만
+      return this.conflicts(list, opts).filter(w => w.b.date === ymd);
+    },
+
+    /** 받침에 맞는 '와/과' */
+    wa(w) { const c = String(w).trim().slice(-1).charCodeAt(0); return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 !== 0 ? '과' : '와'; },
   };
 
   root.Backtime = Backtime;
