@@ -42,10 +42,20 @@ const App = {
     this.scheduleAlerts();
     setInterval(() => { if (this.tab === 'home') this.render(); }, 60000);
     this._booted = true;
+    // 뒤로 가기(스와이프·안드로이드 뒤로): 다른 탭이면 홈으로, 열린 창이 있으면 닫기
+    try { history.replaceState({ tab: 'home' }, ''); } catch { /* */ }
+    window.addEventListener('popstate', e => {
+      const open = document.querySelector('.modal-back, .voice-back');
+      if (open) { open.remove(); try { history.pushState({ tab: this.tab }, ''); } catch { /* */ } return; }
+      this.go((e.state && e.state.tab) || 'home', true);
+    });
     if (window.AutoNav) AutoNav.init();   // 차에 타면 자동 길안내 (?go=next · ceoplanner://next)
   },
 
-  go(tab) {
+  go(tab, fromHistory) {
+    if (!fromHistory && tab !== this.tab) {
+      try { if (tab === 'home') history.replaceState({ tab }, ''); else if (this.tab === 'home') history.pushState({ tab }, ''); else history.replaceState({ tab }, ''); } catch { /* file: 등 */ }
+    }
     this.tab = tab;
     this.render();
     window.scrollTo(0, tab === 'chat' ? document.body.scrollHeight : 0);
@@ -180,7 +190,7 @@ const App = {
     const leaveStep = steps.find(st => st.kind === 'leave');
     const headLabel = s.date === U.today() ? '다음 일정' : tonight && leaveStep ? '오늘 밤 출발 · 내일' : '내일 첫 일정';
     const mode = Backtime.MODES[s.mode] || Backtime.MODES.none;
-    const sub = [s.location ? U.esc(s.location) : '', s.mode !== 'none' ? `${mode.label}${s.travelMin ? ' ' + U.durLabel(s.travelMin) : ''}` : ''].filter(Boolean).join(' · ');
+    const sub = [s.location ? U.esc(s.location) : '', s.mode !== 'none' ? `<span class="nw">${mode.label}${s.travelMin ? ' ' + U.durLabel(s.travelMin) : ''}</span>` : ''].filter(Boolean).join(' · ');
     const fill = steps.length > 1 ? (cur < 0 ? 1 : cur / (steps.length - 1)) : 0;
     const stepHtml = `<ol class="steps" style="--n:${steps.length};--fill:${fill.toFixed(3)}">${steps.map((st, i) =>
       `<li class="${cur < 0 || i < cur ? 'done' : i === cur ? (overdue ? 'now late' : 'now') : ''}"><i>${cur < 0 || i < cur ? Icon.svg('check', 12) : ''}</i><span>${st.label}</span><b>${tonight && U.ymd(st.at) === U.today() ? '<small>오늘</small>' : ''}${U.hm(st.at)}</b></li>`).join('')}</ol>`;
@@ -390,6 +400,7 @@ const App = {
       e.preventDefault();
       const patch = Object.fromEntries(new FormData(e.target));
       if (patch.prepMin) patch.prepMin = Number(patch.prepMin);
+      if ('name' in patch && !String(patch.name).trim()) return U.toast('이름을 넣어 주세요');
       try { await Store.saveProfile(patch); m.remove(); U.toast('저장했어요'); this.render(); }
       catch (err) { U.toast('저장하지 못했어요: ' + (err.message || err)); }
     });
@@ -409,13 +420,18 @@ const App = {
 
   // ───────── 공지사항 (오른쪽 위 종) ─────────
   /** 아직 안 본 공지 수 — 마지막으로 연 시각보다 새 공지 */
-  unreadNotices() {
+  noticeSeen() {
     let seen = ''; try { seen = localStorage.getItem('CEOP_NOTICE_SEEN') || ''; } catch { /* */ }
+    const acc = this.profile().noticeSeenAt || '';
+    return acc > seen ? acc : seen;
+  },
+  unreadNotices() {
+    const seen = this.noticeSeen();
     return Store.notices().filter(n => n.at > seen).length;
   },
   openNotices() {
     const list = Store.notices();
-    let seen = ''; try { seen = localStorage.getItem('CEOP_NOTICE_SEEN') || ''; } catch { /* */ }
+    const seen = this.noticeSeen();
     const d = iso => { const t = new Date(iso); return `${t.getFullYear()}.${t.getMonth() + 1}.${t.getDate()}`; };
     this.modal(`<div class="notices">
       <div class="sheet-head"><h3>공지사항</h3><button class="sq" data-close aria-label="닫기">${Icon.svg('x', 18)}</button></div>
@@ -424,7 +440,9 @@ const App = {
         <p>${U.esc(n.body).replace(/\n/g, '<br>')}</p></details></li>`).join('')}</ul>`
         : '<p class="muted" style="padding:20px 0;text-align:center">아직 공지사항이 없어요.</p>'}
     </div>`);
-    try { if (list[0]) localStorage.setItem('CEOP_NOTICE_SEEN', list.reduce((m, n) => n.at > m ? n.at : m, '')); } catch { /* */ }
+    const latest = list.reduce((m, n) => n.at > m ? n.at : m, '');
+    try { if (latest) localStorage.setItem('CEOP_NOTICE_SEEN', latest); } catch { /* */ }
+    if (latest && latest > (this.profile().noticeSeenAt || '')) Store.saveProfile({ noticeSeenAt: latest }).catch(() => {});
     this.render();
   },
 
@@ -492,8 +510,10 @@ const App = {
       add('v-said', `“${U.esc(text)}”`);
       const r = Assistant.interpret(text, { schedules: Store.list(), now: new Date(), profile: this.profile() });
       if (r.kind !== 'action') return add('v-bot', U.esc(r.say));
-      const card = add('v-card', `<span class="k">이렇게 바꿀까요?</span><b>${U.esc(r.say)}</b><ul>${r.lines.map(l => `<li class="${l.startsWith('주의') ? 'warn' : ''}">${U.esc(l)}</li>`).join('')}</ul>
-        <div class="ai-do"><button class="btn" data-no>취소</button><button class="btn primary" data-yes>이대로 바꾸기</button></div>`);
+      const op = (r.changes[0] || {}).op;
+      const yes = !r.changes.length ? '비서에게 보내기' : op === 'cancel' ? '취소하기' : r.changes[0].schedule && !Store.get(r.changes[0].schedule.id) ? '등록하기' : '이대로 바꾸기';
+      const card = add('v-card', `<span class="k">확인해 주세요</span><b>${U.esc(r.say)}</b><ul>${r.lines.map(l => `<li class="${l.startsWith('주의') ? 'warn' : ''}">${U.esc(l)}</li>`).join('')}</ul>
+        <div class="ai-do"><button class="btn" data-no>${op === 'cancel' ? '그대로 두기' : '취소'}</button><button class="btn primary" data-yes>${yes}</button></div>`);
       card.querySelector('[data-no]').addEventListener('click', () => { card.querySelector('.ai-do').innerHTML = '<span class="muted small">취소했어요</span>'; });
       card.querySelector('[data-yes]').addEventListener('click', async () => {
         try {

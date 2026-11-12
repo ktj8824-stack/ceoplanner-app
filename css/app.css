@@ -470,3 +470,7 @@ nav.tabs .mic-tab > span:last-child { transform: translateY(16px); }
 .rc-acts { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 8px; margin-top: 12px; }
 .rc-acts .btn { height: 44px; font-size: 15px; }
 .rc-x { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border: 0; background: transparent; color: var(--slate); display: grid; place-items: center; }
+
+/* 큰 카드 '기사 차량 35분'이 '35 / 분'으로 끊기지 않게 · 글자 '아주'에서 일정 이름이 단어 중간에서 끊기지 않게 */
+.nw { white-space: nowrap; }
+.tl-item .n, .card .n strong, .nc-head b { word-break: keep-all; overflow-wrap: anywhere; }

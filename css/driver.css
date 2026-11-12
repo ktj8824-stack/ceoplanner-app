@@ -35,3 +35,4 @@ body.driver { background: var(--porcelain, #F4F5F7); }
 .dc-done { margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ok); font-weight: 700; }
 .drv-empty { padding: 40px 16px; text-align: center; color: var(--slate); }
 .drv-foot { text-align: center; font-size: 13px; color: var(--slate); padding: 4px 16px 28px; }
+.dc-pill.late { background: var(--signal, #C2410C); color: #fff; }

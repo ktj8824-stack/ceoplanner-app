@@ -29,6 +29,14 @@ const Drv = {
     try { const m = JSON.parse(localStorage.getItem('CEOP_DRV') || '{}'); m[id] = { ...(m[id] || {}), [kind]: new Date().toISOString() }; localStorage.setItem('CEOP_DRV', JSON.stringify(m)); } catch { /* */ }
   },
 
+  /** 대기 장소: 출발지 칸이 비면 그날 바로 앞 일정 장소 (없으면 본사) */
+  waitPlace(s) {
+    if (s.origin) return s.origin;
+    const prev = Store.list().filter(x => x.date === s.date && x.id !== s.id && x.location && !x.masked && x.status !== 'cancelled' && (x.end || x.start) <= s.start)
+      .sort((a, b) => (a.end || a.start).localeCompare(b.end || b.start)).pop();
+    return prev ? prev.location : '본사';
+  },
+
   jobs(ymd) {
     const p = Store.profile();
     const list = Store.list().filter(s => s.date === ymd && s.status !== 'cancelled' && s.visibility !== 'private' && !s.masked
@@ -61,20 +69,21 @@ const Drv = {
     const callAt = pl.driverCallAt || pl.leaveAt;
     const soon = U.diffMin(callAt, now);
     const past = pl.endAt < now;
+    const late = !past && soon < -5 && !st.wait && !st.depart;
     const timeline = this.STEPS.map((x, i) => `<li class="${st[x.kind] ? 'done' : i === nextIdx ? 'now' : ''}"><i>${st[x.kind] ? Icon.svg('check', 12) : ''}</i><span>${x.done}</span><b>${st[x.kind] ? U.hm(new Date(st[x.kind])) : ''}</b></li>`).join('');
     const next = nextIdx >= 0 && !past ? this.STEPS[nextIdx] : null;
     return `<article class="drv-card ${past ? 'past' : ''}">
       <div class="dc-top"><div class="dc-call"><small>대기 시각</small><b class="num">${U.hm(callAt)}</b></div>
-        <span class="dc-pill ${soon <= 30 && soon > -30 && !st.depart ? 'soon' : ''}">${past ? '끝남' : soon > 0 ? (soon < 60 ? `${soon}분 뒤` : `${U.durLabel(soon)} 뒤`) : st.depart ? '운행 중' : '대기 시간'}</span></div>
+        <span class="dc-pill ${late ? 'late' : soon <= 30 && soon > -30 && !st.depart ? 'soon' : ''}">${past ? '끝남' : late ? `대기 ${U.durLabel(-soon)} 지남` : soon > 0 ? (soon < 60 ? `${soon}분 뒤` : `${U.durLabel(soon)} 뒤`) : st.depart ? '운행 중' : '대기 시간'}</span></div>
       <dl class="dc-route">
-        <dt>대기 장소</dt><dd>${U.esc(s.origin || '본사')}</dd>
+        <dt>대기 장소</dt><dd>${U.esc(this.waitPlace(s))}</dd>
         <dt>출발</dt><dd class="num">${U.hm(pl.leaveAt)}</dd>
         <dt>${trip ? '역 · 공항' : '도착 목표'}</dt><dd><b>${U.esc(dest)}</b> <span class="num">${trip ? (s.trip && s.trip.departTime ? `${s.trip.departTime} 출발편` : '') : U.hm(pl.arriveBy)}</span></dd>
         <dt>일정</dt><dd>${s.start} ${U.esc(s.title)}</dd>
       </dl>
       <ol class="dc-steps">${timeline}</ol>
       <div class="dc-acts">${next ? `<button class="btn primary big" data-step="${next.kind}" data-id="${s.id}">${next.btn}</button>` : `<p class="dc-done">${past ? '' : Icon.svg('checkCircle', 18) + ' 현장 도착을 알렸어요'}</p>`}
-        <a class="btn" href="${U.tmapLink(st.wait || st.depart ? dest : (s.origin || dest))}">${Icon.svg('nav', 16)} 길안내</a></div>
+        <a class="btn" href="${U.tmapLink(st.wait || st.depart ? dest : this.waitPlace(s))}">${Icon.svg('nav', 16)} 길안내</a></div>
     </article>`;
   },
 
@@ -82,7 +91,7 @@ const Drv = {
     const s = Store.get(id); if (!s) return;
     const name = Store.profile().driverName || '기사';
     const body = {
-      wait: `${name}님: 출발지(${s.origin || '본사'}) 도착, 대기 중이에요 · '${s.title}'`,
+      wait: `${name}님: 출발지(${this.waitPlace(s)}) 도착, 대기 중이에요 · '${s.title}'`,
       depart: `${name}님: 대표님 탑승, 출발했어요 · '${s.title}' ${s.trip ? (s.trip.station || '역') : (s.location || '현장')}으로`,
       arrive: `${name}님: 현장 도착했어요 · '${s.title}'`,
     }[kind];

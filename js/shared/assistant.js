@@ -36,9 +36,10 @@
       const day = this.dateInfo(n, now);
       if (day.err) return { kind: 'answer', say: day.err };
 
-      if (/늦|지연|막혀|막힘/.test(n) && !/미뤄|미루/.test(n)) return this.delay(n, list, now, ctx);
+      // '늦어/늦을/늦겠…'은 지연 알림, '늦춰/늦추'는 미루기
+      if (/늦어|늦을|늦겠|늦는|늦었|늦게 도착|지연|막혀|막힘/.test(n) && !/미뤄|미루|늦춰|늦추/.test(n)) return this.delay(n, list, now, ctx);
       if (/취소/.test(n)) return this.cancel(n, list, now, day.ymd);
-      if (/미뤄|미루|늦춰|당겨|옮겨|바꿔|변경/.test(n)) return this.move(n, list, now, day.ymd);
+      if (/미뤄|미루|늦춰|늦추|당겨|옮겨|바꿔|변경/.test(n)) return this.move(n, list, now, day.ymd);
       if (/잡아|추가|등록|넣어|만들어/.test(n)) return this.create(n, list, now, ctx);
       if (/몇\s*시|언제|알려|뭐야|뭐 있|있어\?|일정은|끝나|마치/.test(n)) return this.ask(n, list, now, ctx);
       // 동사 없이 '내일 오전 10시 삼성동 미팅'처럼 날짜 + 시각 + 이름만 말해도 등록 카드로
@@ -69,6 +70,13 @@
         return { ymd: null, err: `${mon}월에는 ${m[2]}일이 없어요. 날짜를 다시 말씀해 주세요.` };
       }
       return { ymd, err: '' };
+    },
+
+    /** 그날 이 시각 전에 끝나는 마지막 일정 장소 (없으면 본사) — 기사님 대기 장소 */
+    originBefore(list, date, start) {
+      const prev = list.filter(x => x.date === date && x.location && !x.masked && x.status !== 'cancelled' && (x.end || x.start) <= start && x.start <= start)
+        .sort((a, b) => (a.end || a.start).localeCompare(b.end || b.start)).pop();
+      return prev ? prev.location : '';
     },
 
     /** 비서에게 알릴 필요가 없는 일정 (대표 개인 일정) */
@@ -121,7 +129,8 @@
       if (!m) return null;
       let h = +m[2];
       const min = m[3] === '반' ? 30 : m[4] ? +m[4] : 0;
-      if (/오후|저녁|밤/.test(m[1] || '') && h < 12) h += 12;
+      if (/밤|새벽/.test(m[1] || '') && h === 12) h = 0;   // '밤 12시' = 자정 (create 에서 날짜를 하루 뒤로)
+      else if (/오후|저녁|밤/.test(m[1] || '') && h < 12) h += 12;
       else if (!m[1] && h >= 1 && h <= 6) h += 12; // '3시' = 오후 3시로 봄
       if (h > 23 || min > 59) return null;
       return `${U.pad(h)}:${U.pad(min)}`;
@@ -267,8 +276,10 @@
 
     // ───────── 등록: "목요일 오후 3시에 한빛전자 미팅 잡아 줘, 삼성동에서" ─────────
     create(t, list, now, ctx) {
-      const date = this.date(t, now);
+      let date = this.date(t, now);
       const start = this.time(t);
+      // '내일 밤 12시' = 모레 00:00 (자정은 다음 날)
+      if (date && /밤\s*12\s*시/.test(t)) date = U.addDays(date, 1);
       if (!date || !start) return { kind: 'answer', say: `${!date ? '날짜' : '시간'}를 같이 말씀해 주세요. 예: "목요일 오후 3시에 한빛전자 미팅 잡아 줘"` };
       const locM = t.match(/([^\s,]+(?:\s[^\s,]+)?)\s*에서/);
       let location = locM ? locM[1] : '';
@@ -285,7 +296,7 @@
       if (!location && /^[가-힣]+동\s/.test(title)) location = title.split(' ')[0];
       const s = {
         id: U.uid(), title, category, date, start, end: U.hm(U.addMin(U.at(date, start), category === 'golf' ? 300 : 60)),
-        location, origin: '', mode: location ? 'driver' : 'none', travelMin: location ? (category === 'golf' ? 60 : 30) : 0, bufferMin: 10,
+        location, origin: this.originBefore(list, date, start), mode: location ? 'driver' : 'none', travelMin: location ? (category === 'golf' ? 60 : 30) : 0, bufferMin: 10,
         visibility: 'normal', status: 'scheduled', briefing: {}, createdBy: 'ceo', ackAt: new Date().toISOString(),
       };
       const d = U.at(date, '00:00');
