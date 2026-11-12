@@ -55,6 +55,7 @@ const App = {
   },
 
   go(tab, fromHistory) {
+    if (window.AutoNav && AutoNav.closeGuide) AutoNav.closeGuide();   // 자동 길안내 가이드가 떠 있으면 닫고 이동
     if (!fromHistory && tab !== this.tab) {
       try { if (tab === 'home') history.replaceState({ tab }, ''); else if (this.tab === 'home') history.pushState({ tab }, ''); else history.replaceState({ tab }, ''); } catch { /* file: 등 */ }
     }

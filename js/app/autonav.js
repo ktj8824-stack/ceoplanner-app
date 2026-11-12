@@ -201,8 +201,38 @@ const AutoNav = {
       <div class="an-g-link"><input readonly value="${this.LINK}" onclick="this.select()"><button type="button" class="btn primary" onclick="AutoNav.copyLink(this)">링크 복사</button></div>
       <div class="an-g-h">3. 휴대폰에 자동 실행 등록</div>
       ${isAndroid ? android + ios : ios + android}
-      <a class="btn primary an-g-guide" href="autonav-guide.html?os=${isAndroid ? 'android' : 'ios'}">그림으로 보는 설정 가이드</a>
+      <a class="btn primary an-g-guide" href="autonav-guide.html?os=${isAndroid ? 'android' : 'ios'}" onclick="return AutoNav.guideClick('${isAndroid ? 'android' : 'ios'}')">그림으로 보는 설정 가이드</a>
       <div class="modal-foot"><button type="button" class="btn" data-close>닫기</button><button type="button" class="btn primary" data-close onclick="AutoNav.start()">지금 시험해 보기</button></div>`);
+  },
+
+  /** 설정 가이드: 아이폰 앱에서는 앱을 떠나지 않고 화면 위에 띄움 (아래 메뉴는 그대로). 웹은 가이드 페이지로 이동 */
+  guideClick(os) {
+    if (!this.isApp()) return true;
+    this.showGuide(os);
+    return false;
+  },
+  showGuide(os) {
+    document.querySelectorAll('.modal-back').forEach(m => m.remove());
+    this.closeGuide();
+    const el = document.createElement('div');
+    el.id = 'an-guide';
+    const tabs = document.getElementById('tabs');
+    if (tabs && !tabs.hidden) el.style.bottom = tabs.getBoundingClientRect().height + 'px';
+    el.innerHTML = `<div class="ang-bar"><button type="button" class="ang-back" onclick="AutoNav.closeGuide()" aria-label="뒤로">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <b>차에 타면 자동 길안내</b></div>
+      <iframe src="autonav-guide.html?os=${os === 'android' ? 'android' : 'ios'}&embed=1" title="자동 길안내 설정 가이드"></iframe>`;
+    document.body.appendChild(el);
+    document.body.classList.add('guide-open');
+    if (!this._msgHooked) {   // 가이드 안 '돌아가기'(앱은 file:// 이라 직접 부를 수 없어 메시지로)
+      window.addEventListener('message', e => { if (e.data && e.data.anGuide === 'close') this.closeGuide(); });
+      this._msgHooked = true;
+    }
+  },
+  closeGuide() {
+    const el = document.getElementById('an-guide');
+    if (el) el.remove();
+    document.body.classList.remove('guide-open');
   },
 
   /** 홈 홍보 줄: 한 번도 실행된 적 없고 ✕를 안 눌렀을 때만 */
@@ -210,7 +240,7 @@ const AutoNav = {
     try { if (localStorage.getItem('ceop_autonav_used') || localStorage.getItem('ceop_autonav_promo_off')) return ''; } catch (e) { return ''; }
     const os = /Android/i.test(navigator.userAgent) ? 'android' : 'ios';
     return `<div class="anp" role="note">
-      <a class="anp-go" href="autonav-guide.html?os=${os}">
+      <a class="anp-go" href="autonav-guide.html?os=${os}" onclick="return AutoNav.guideClick('${os}')">
         <span class="anp-ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6 17l1.5-5h9L18 17M7.5 12l1.2-3.6A2 2 0 0 1 10.6 7h2.8a2 2 0 0 1 1.9 1.4L16.5 12"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg></span>
         <span class="anp-t"><b>차에 타면 길안내가 저절로</b><small>차에 연결되면 내비 자동 실행</small></span>
         <span class="anp-btn">1분 설정</span>
