@@ -202,6 +202,7 @@ const AutoNav = {
       <div class="an-g-h">3. 휴대폰에 자동 실행 등록</div>
       ${isAndroid ? android + ios : ios + android}
       <a class="btn primary an-g-guide" href="autonav-guide.html?os=${isAndroid ? 'android' : 'ios'}" onclick="return AutoNav.guideClick('${isAndroid ? 'android' : 'ios'}')">그림으로 보는 설정 가이드</a>
+      <button type="button" class="btn an-g-guide" onclick="AutoNav.markDone()">✓ 설정 완료했어요</button>
       <div class="modal-foot"><button type="button" class="btn" data-close>닫기</button><button type="button" class="btn primary" data-close onclick="AutoNav.start()">지금 시험해 보기</button></div>`);
   },
 
@@ -225,7 +226,7 @@ const AutoNav = {
     document.body.appendChild(el);
     document.body.classList.add('guide-open');
     if (!this._msgHooked) {   // 가이드 안 '돌아가기'(앱은 file:// 이라 직접 부를 수 없어 메시지로)
-      window.addEventListener('message', e => { if (e.data && e.data.anGuide === 'close') this.closeGuide(); });
+      window.addEventListener('message', e => { if (e.data && e.data.anGuide === 'close') this.closeGuide(); else if (e.data && e.data.anGuide === 'done') this.markDone(); });
       this._msgHooked = true;
     }
   },
@@ -248,6 +249,18 @@ const AutoNav = {
       <button type="button" class="anp-x" aria-label="다시 보지 않기" onclick="AutoNav.hidePromo()">✕</button>
     </div>`;
   },
+  /** '설정 완료' 버튼: 홈의 '1분 설정' 안내를 더 띄우지 않음 (가이드 안·설정 창에서 누름) */
+  markDone() {
+    try { localStorage.setItem('ceop_autonav_setup_done', '1'); } catch (e) { }
+    this.hidePromo();
+    if (this.closeGuide) this.closeGuide();
+    try { if (typeof App !== 'undefined' && App.closeModal) App.closeModal(); } catch (e) { }
+    try { if (typeof Sheet !== 'undefined' && Sheet.close) Sheet.close(); } catch (e) { }
+    document.querySelectorAll('.modal-back').forEach(m => m.remove());
+    const msg = '설정 완료! 홈에 설정 안내가 더 뜨지 않아요';
+    if (typeof U !== 'undefined' && U.toast) U.toast(msg); else if (typeof App !== 'undefined' && App.toast) App.toast(msg);
+  },
+
   hidePromo() {
     try { localStorage.setItem('ceop_autonav_promo_off', '1'); } catch (e) { /* */ }
     document.querySelectorAll('.anp').forEach(el => el.remove());

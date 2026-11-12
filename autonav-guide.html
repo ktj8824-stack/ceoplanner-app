@@ -145,6 +145,9 @@ footer{padding:22px 0 32px;color:var(--mute);font-size:13px;text-align:center}
 }
 /* 앱 안에 띄울 때(embed=1): 앱이 위 막대를 그리므로 이 페이지 머리는 숨김 */
 html.embed .top{display:none}
+.donebox{margin-top:28px;padding:18px 20px;border:1.5px solid var(--acc);border-radius:16px;background:#fff;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.donebox p{margin:0;font-size:15px;line-height:1.5;color:var(--ink)}
+.donebox .btn.done{background:#E5E7EB;color:#4B5563;cursor:default}
 </style>
 </head>
 <body>
@@ -283,6 +286,7 @@ html.embed .top{display:none}
       </div>
     </div>
   </div>
+  <div class="in"><div class="donebox"><p><b>다 등록했나요?</b><br>누르면 홈 화면의 '1분 설정' 안내가 더 뜨지 않아요.</p><button class="btn pri" type="button" id="done-btn">✓ 설정 완료</button></div></div>
 </section>
 
 <section class="sec faq">
@@ -345,6 +349,16 @@ html.embed .top{display:none}
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(ok, function () { inp.select(); document.execCommand('copy'); ok(); });
       else { inp.select(); document.execCommand('copy'); ok(); }
     });
+  });
+  // '설정 완료': 앱 안이면 앱에 알려 홈 안내를 끄고 가이드를 닫음, 웹이면 이 브라우저에 기록
+  var DONE_KEY = 'ceop_autonav_promo_off', db = document.getElementById('done-btn');
+  function doneShown() { db.textContent = '✓ 설정 완료됨'; db.classList.add('done'); }
+  try { if (localStorage.getItem(DONE_KEY) || localStorage.getItem('ceop_autonav_setup_done')) doneShown(); } catch (e) { }
+  db.addEventListener('click', function () {
+    if (embed) { try { window.parent.AutoNav.markDone(); } catch (x) { try { window.parent.postMessage({ anGuide: 'done' }, '*'); } catch (y) { } } return; }
+    try { localStorage.setItem(DONE_KEY, '1'); localStorage.setItem('ceop_autonav_setup_done', '1'); } catch (e) { }
+    doneShown();
+    var t = document.getElementById('toast'); if (t) { t.textContent = '설정 완료! 이제 홈에 설정 안내가 뜨지 않아요'; t.classList.add('on'); setTimeout(function () { t.classList.remove('on'); }, 2000); }
   });
 })();
 </script>
