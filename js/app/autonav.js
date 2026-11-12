@@ -30,7 +30,45 @@ const AutoNav = {
     } catch (e) { return false; }
   },
   /** 화면이 준비된 뒤 (App.boot 끝) 부름. 아이폰 앱은 ceoplanner://next 로 열리면 앱이 AutoNav.fromApp() 을 부름 */
-  init() { if (this._consumeFlag() || window.__ceopGoNext) { window.__ceopGoNext = false; setTimeout(() => this.start(), 300); } },
+  init() {
+    if (!this._watching) {
+      this._watching = true;
+      document.addEventListener('visibilitychange', () => { if (document.hidden) this.keepNotice(); });
+      window.addEventListener('pagehide', () => this.keepNotice());
+    }
+    if (this._consumeFlag() || window.__ceopGoNext) { window.__ceopGoNext = false; setTimeout(() => this.start(), 300); }
+  },
+
+  /* ── 출발 1시간 전부터 '다음 일정' 알림을 알림 목록에 남겨 두기 ──
+     미리 눌러서 사라졌으면 앱을 떠날 때 다시 올려 두고(소리 없이), 길안내를 시작하면 지움. 기사 운전 일정은 제외 */
+  _noticeInfo(now = new Date()) {
+    const r = this.nextLeg(now);
+    const l = r && (r.leg || r.later);
+    if (!l || !l.s || l.s.mode === 'driver') return null;
+    const left = (l.dep - now.getTime()) / 60000;
+    if (left > 65 || left < -20) return null;
+    try { if (localStorage.getItem('ceop_autonav_gone') === l.s.id) return null; } catch (e) { /* */ }
+    return { id: l.s.id, title: `🚗 다음 일정 · ${U.hm(new Date(l.dep))} 출발`, body: `${l.s.title}${l.s.location ? ' · ' + l.s.location : ''}\n차에 타면 눌러서 바로 길안내` };
+  },
+  async keepNotice() {
+    try {
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return;
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (!reg || !reg.showNotification) return;
+      const n = this._noticeInfo();
+      const tag = n ? 'next-' + n.id : '';
+      const all = await reg.getNotifications();
+      all.forEach(x => { if (/^next-/.test(x.tag || '') && x.tag !== tag) x.close(); });
+      if (!n || all.some(x => x.tag === tag)) return;
+      await reg.showNotification(n.title, { body: n.body, tag, silent: true, icon: new URL('icon.svg', reg.scope).href, data: { url: new URL('./?go=next', reg.scope).href } });
+    } catch (e) { /* */ }
+  },
+  async clearNotice() {
+    try {
+      const reg = 'serviceWorker' in navigator && await navigator.serviceWorker.getRegistration();
+      if (reg && reg.getNotifications) (await reg.getNotifications()).forEach(x => { if (/^next-/.test(x.tag || '')) x.close(); });
+    } catch (e) { /* */ }
+  },
   fromApp() {
     if (typeof App === 'undefined' || !App._booted) { window.__ceopGoNext = true; return; }   // 아직 로그인·로딩 중이면 끝나고 시작
     this.start();
@@ -95,6 +133,8 @@ const AutoNav = {
     const l = this._leg;
     this._close();
     if (!l) return;
+    try { localStorage.setItem('ceop_autonav_gone', l.s.id); } catch (e) { /* */ }   // 길안내 시작 = 출발 → 남겨 둔 알림 지움
+    this.clearNotice();
     const q = encodeURIComponent(l.s.location);
     const url = app === 'kakaomap' ? `kakaomap://search?q=${q}` : U.tmapLink(l.s.location);
     const web = `https://map.kakao.com/link/search/${q}`;

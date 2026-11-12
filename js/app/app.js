@@ -42,6 +42,8 @@ const App = {
     this.scheduleAlerts();
     setInterval(() => { if (this.tab === 'home') this.render(); }, 60000);
     this._booted = true;
+    // 알림 전용 서비스워커 (화면 파일 캐시는 하지 않음) — 알림을 누르면 앱을 여는 데만 씀
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('./sw-notify.js').catch(() => { });
     // 뒤로 가기(스와이프·안드로이드 뒤로): 다른 탭이면 홈으로, 열린 창이 있으면 닫기
     try { history.replaceState({ tab: 'home' }, ''); } catch { /* */ }
     window.addEventListener('popstate', e => {
@@ -575,6 +577,19 @@ const App = {
     } catch (err) { U.toast('확인하지 못했어요: ' + (err.message || err)); }
   },
 
+  /** 알림 띄우기: 알림 전용 서비스워커가 있으면 그것으로(안드로이드·아이폰 홈 화면 앱은 이 방법만 됨). nav면 누르면 ?go=next → 바로 길안내 */
+  async notify(title, body, nav, tag) {
+    try {
+      const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
+      if (reg && reg.showNotification) {
+        return await reg.showNotification(title, { body, icon: new URL('icon.svg', reg.scope).href, ...(tag ? { tag } : {}),
+          data: { url: new URL(nav ? './?go=next' : './', reg.scope).href } });
+      }
+      const n = new Notification(title, { body });
+      if (nav) n.onclick = () => { try { window.focus(); n.close(); } catch (e) { /* */ } if (typeof AutoNav !== 'undefined') AutoNav.start(); };
+    } catch (e) { /* 알림을 못 띄워도 앱은 그대로 */ }
+  },
+
   async askNotif() {
     if (this.notifState() === 'denied') return this.go('me');
     await Notification.requestPermission();
@@ -639,7 +654,11 @@ const App = {
     [U.today(), U.addDays(U.today(), 1)].forEach(ymd => this.dayPlan(ymd).forEach(({ s, p }) => {
       p.items.filter(it => ['wake', 'driver', 'leave'].includes(it.kind)).forEach(it => {
         const ms = it.at.getTime() - now;
-        if (ms > 0 && ms < 12 * 3600e3) this._timers.push(setTimeout(() => new Notification(it.title, { body: `${s.title} · ${s.start}` }), ms));
+        const nav = it.kind === 'leave' && s.mode !== 'driver';   // 직접 운전·택시 등 출발 알림 → 누르면 바로 길안내
+        if (ms > 0 && ms < 12 * 3600e3) this._timers.push(setTimeout(() => this.notify(it.title, `${s.title} · ${s.start}${nav ? '\n눌러서 바로 길안내' : ''}`, nav, nav ? 'next-' + s.id : ''), ms));
+        // 출발 1시간 전 '다음 일정' 알림: 알림 목록에 남겨 두면 차에 타서 눌러 바로 길안내
+        const ms1 = ms - 3600e3;
+        if (nav && ms1 > 0 && ms1 < 12 * 3600e3) this._timers.push(setTimeout(() => this.notify(`🚗 다음 일정 · ${U.hm(it.at)} 출발`, `${s.title}${s.location ? ' · ' + s.location : ''}\n차에 타면 눌러서 바로 길안내`, true, 'next-' + s.id), ms1));
       });
     }));
     // 밤 9시까지 내일 브리핑을 확인하지 않았으면 한 번 알려 줌 (하루 한 번)
@@ -648,7 +667,7 @@ const App = {
       const b = this.latestBrief(), key = 'CEOP_BRIEF_NOTIFIED';
       if (!b || b.ymd !== U.addDays(U.today(), 1) || !b.pending.length || localStorage.getItem(key) === b.ymd) return;
       localStorage.setItem(key, b.ymd);
-      new Notification('내일 일정 확인', { body: `확인 대기 ${b.pending.length}건 — 앱에서 '모두 확인'을 눌러 주세요` });
+      this.notify('내일 일정 확인', `확인 대기 ${b.pending.length}건 — 앱에서 '모두 확인'을 눌러 주세요`, false, 'brief');
     }, nine));
   },
 };
