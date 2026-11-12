@@ -283,7 +283,10 @@
       if (!date || !start) return { kind: 'answer', say: `${!date ? '날짜' : '시간'}를 같이 말씀해 주세요. 예: "목요일 오후 3시에 한빛전자 미팅 잡아 줘"` };
       const locM = t.match(/([^\s,]+(?:\s[^\s,]+)?)\s*에서/);
       let location = locM ? locM[1] : '';
-      let title = this.titleOf(t, locM) || '새 일정';
+      // '최상무님이랑' · '정민호 부사장님과' → 만날 분 (제목에서는 빼기)
+      const whoM = t.match(/([가-힣]{1,4}(?:\s[가-힣]{1,4})?님)\s*(?:이랑|랑|과|와|하고|이랑은)/);
+      const who = whoM ? whoM[1].replace(/님$/, '') : '';
+      let title = this.titleOf(whoM ? t.replace(whoM[0], ' ') : t, locM) || '새 일정';
       let category = 'external';
       for (const [re, cat] of CAT_WORDS) if (re.test(title)) { category = cat; break; }
       // '남서울 골프' 처럼 골프 앞 낱말은 골프장 이름으로 보고 장소에 넣음 (비서가 확인)
@@ -297,16 +300,23 @@
       const s = {
         id: U.uid(), title, category, date, start, end: U.hm(U.addMin(U.at(date, start), category === 'golf' ? 300 : 60)),
         location, origin: this.originBefore(list, date, start), mode: location ? 'driver' : 'none', travelMin: location ? (category === 'golf' ? 60 : 30) : 0, bufferMin: 10,
-        visibility: 'normal', status: 'scheduled', briefing: {}, createdBy: 'ceo', ackAt: new Date().toISOString(),
+        visibility: 'normal', status: 'scheduled', briefing: who ? { who } : {}, createdBy: 'ceo', ackAt: new Date().toISOString(),
       };
+      // 식사인데 장소를 안 말했으면, 대표님이 '좋았어요'라고 한 식당 2곳을 카드에서 고르게 (같은 분과 갔던 곳이 먼저)
+      const L = root.Learn;
+      const choices = category === 'dinner' && !location && L
+        ? L.places(list.filter(x => !x.masked), { who }, 2).map(p => ({ location: p.name,
+            sub: p.withThem ? `${p.withThem.who ? p.withThem.who.split(' ')[0] + '님과 ' : ''}${p.withThem.date.slice(5).replace('-', '/')} 좋았어요` : `좋았어요 ${p.good}번` }))
+        : [];
       const d = U.at(date, '00:00');
       const all = [...list, s];
       const warns = [...Backtime.conflictsOn(all, date), ...Backtime.conflictsOn(all, U.addDays(date, 1))].filter(w => w.a === s || w.b === s);
       return {
         kind: 'action',
         say: `이렇게 등록할까요?`,
-        lines: [title, `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]}) ${start}–${s.end}`, location ? `${location}${guessed ? ' (골프장 이름 맞나요?)' : ''} · 기사 차량 · 이동 ${s.travelMin}분(임시)` : '장소 없음 · 이동 없음', ...warns.map(w => `주의: ${w.msg}`), '등록하면 비서에게 장소 · 이동 시간 확인을 부탁해요'],
+        lines: [title, `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]}) ${start}–${s.end}`, location ? `${location}${guessed ? ' (골프장 이름 맞나요?)' : ''} · 기사 차량 · 이동 ${s.travelMin}분(임시)` : choices.length ? '장소: 아래 추천에서 고르거나, 그대로 두면 비서가 정해요' : '장소 없음 · 이동 없음', ...(who ? [`만날 분: ${who}님`] : []), ...warns.map(w => `주의: ${w.msg}`), '등록하면 비서에게 장소 · 이동 시간 확인을 부탁해요'],
         changes: [{ op: 'upsert', schedule: s }],
+        choices,
         notify: { body: `대표님이 '${title}' (${d.getMonth() + 1}/${d.getDate()} ${start}) 일정을 직접 넣었어요. 장소 · 이동 시간 확인 부탁해요.`, ref: s.id },
       };
     },

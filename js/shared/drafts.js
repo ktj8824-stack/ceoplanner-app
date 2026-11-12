@@ -33,6 +33,13 @@
         `어려우시면 편하신 시간을 말씀해 주시면 맞추겠습니다. 감사합니다.`;
     },
 
+    /** 이동 중 늦을 때 (기사님 출발 기록 · 도착 예상으로) */
+    late(s, min, profile) {
+      return `${this.hello(s.briefing)} ${this.me(profile)}\n` +
+        `대표님께서 지금 이동 중이신데, 약 ${min}분 늦게 도착하실 것 같습니다.\n` +
+        `기다리시게 해서 죄송합니다. 도착하시는 대로 바로 시작하겠습니다.`;
+    },
+
     /** 취소 */
     cancel(s, profile) {
       return `${this.hello(s.briefing)} ${this.me(profile)}\n` +

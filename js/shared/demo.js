@@ -38,6 +38,8 @@ const Demo = {
       return S({ title, category: 'dinner', date: d, start: '12:00', end: '13:30', location: place, mode: 'driver', travelMin: 25, ackAt: at(d, '08:00'), actual: { rating }, briefing: b }); };
     return [
       trip(15, '09:05', 40), trip(9, '09:03', 45), trip(4, '09:08', 41),
+      // 같은 길도 퇴근 시간대(17시대)엔 60분 안팎 — 시간대별 학습 시연
+      trip(14, '17:10', 62, { title: '한빛전자 저녁 협의', start: '18:20', end: '19:30' }), trip(8, '17:05', 58, { title: '한빛전자 저녁 협의', start: '18:10', end: '19:00' }), trip(3, '17:15', 64, { title: '한빛전자 저녁 협의', start: '18:30', end: '19:30' }),
       meal(13, '그린벤처스 점심', '광화문 한정식 소담', 'good', { who: '최서연 상무', company: '그린벤처스' }),
       meal(11, '대한건설 오찬', '청담 스시 오마카세', 'bad', { who: '윤태식 회장', company: '대한건설' }),
       meal(7, '한빛전자 점심', '광화문 한정식 소담', 'good', { who: '정민호 부사장', company: '한빛전자' }),

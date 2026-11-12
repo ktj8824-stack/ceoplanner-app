@@ -474,3 +474,20 @@ nav.tabs .mic-tab > span:last-child { transform: translateY(16px); }
 /* 큰 카드 '기사 차량 35분'이 '35 / 분'으로 끊기지 않게 · 글자 '아주'에서 일정 이름이 단어 중간에서 끊기지 않게 */
 .nw { white-space: nowrap; }
 .tl-item .n, .card .n strong, .nc-head b { word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 도착 예상 · 늦을 것 같을 때 */
+.drv-line.eta b { color: #fff; margin-left: 2px; }
+.drv-line.eta small { margin-left: 6px; font-size: 12px; font-weight: 500; color: #9AA6B6; }
+.drv-line.eta.late b { color: #FFB59E; }
+.late-box { margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(194, 65, 12, .18); border: 1px solid rgba(255, 140, 110, .45); color: #FFD3C4; border-radius: 12px; padding: 8px 10px; font-size: 14px; }
+.late-box span { display: block; flex: 1; line-height: 1.45; word-break: keep-all; }
+.late-box span svg { vertical-align: -3px; margin-right: 4px; }
+.late-box .btn { height: 36px; padding: 0 12px; font-size: 13.5px; background: #fff; color: var(--navy); border: 0; flex: none; }
+.late-box small { color: #FFD3C4; flex: none; }
+
+/* AI 카드: 좋았던 식당 고르기 (흰 카드 위) */
+.ai-pick { display: grid; gap: 6px; }
+.ai-pick .lbl { font-size: 12.5px; color: var(--brass-ink); font-weight: 700; }
+.ai-pick button { display: grid; text-align: left; gap: 1px; padding: 8px 12px; min-height: 44px; border-radius: 12px; border: 1px solid var(--brass); background: #fff; color: var(--ink); }
+.ai-pick button b { font-size: 14.5px; } .ai-pick button small { font-size: 12px; color: var(--slate); }
+.ai-pick button.on { background: var(--navy); color: #fff; border-color: var(--navy); } .ai-pick button.on small { color: #C3CBD6; }

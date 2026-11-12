@@ -3,7 +3,9 @@
    화면·네트워크와 상관없는 순수 계산 모듈 → tests/learn-test.cjs
 
    - actual(s, messages): 실제 출발·도착 시각 (대표가 누른 기록 → 없으면 기사님 메시지 시각)
-   - travel(list, messages, { origin, location }): 같은 길의 실제 이동 시간 평균 (3번 이상 쌓이면)
+   - travel(list, messages, { origin, location, at }): 같은 길의 실제 이동 시간 평균 (3번 이상 쌓이면)
+       at(출발 예정 시각)을 주면 같은 시간대(출근 · 낮 · 퇴근 · 밤) 기록을 먼저 씀
+   - eta(s, messages, list): 출발 기록이 있으면 도착 예상 시각 · 시작보다 몇 분 늦을지
    - places(list, { who, company }): 대표님이 '좋았어요'라고 한 식사 장소 추천
    - placeNote(list, location): 이 장소에 대한 대표님 지난 평가
    - repeatDates(date, kind, count): 반복 일정 날짜들
@@ -20,6 +22,28 @@
   const Learn = {
     MIN_SAMPLES: 3,
     RATING: { good: '좋았어요', ok: '보통', bad: '별로' },
+
+    /** 시간대 — 같은 길도 출근 · 퇴근 때는 훨씬 오래 걸려요 */
+    slot(d) {
+      const h = new Date(d).getHours();
+      if (h >= 6 && h < 10) return { key: 'am', label: '출근 시간대' };
+      if (h >= 10 && h < 16) return { key: 'mid', label: '낮 시간대' };
+      if (h >= 16 && h < 20) return { key: 'pm', label: '퇴근 시간대' };
+      return { key: 'night', label: '밤 시간대' };
+    },
+
+    /** 같은 사람인지: '최상무님' ↔ '최서연 상무' · '정민호 부사장' ↔ '정민호 부사장님' */
+    samePerson(a, b) {
+      const norm = x => String(x || '').replace(/님/g, '').trim();
+      const A = norm(a), Bs = norm(b);
+      if (!A || !Bs) return false;
+      const ka = A.replace(/\s+/g, ''), kb = Bs.replace(/\s+/g, '');
+      if (ka === kb || kb.startsWith(ka) || ka.startsWith(kb)) return true;
+      // '최상무'(성 + 직함) ↔ '최서연 상무'(이름 + 직함)
+      const parts = s => { const p = s.split(/\s+/); return p.length >= 2 ? { last: p[0][0], title: p[p.length - 1] } : { last: s[0], title: s.slice(1) }; };
+      const pa = parts(A), pb = parts(Bs);
+      return !!pa.title && pa.last === pb.last && pa.title === pb.title;
+    },
 
     /** 장소 이름 비교용 (띄어쓰기·대소문자 무시) */
     key(place) { return String(place || '').replace(/\s+/g, '').toLowerCase(); },
@@ -58,20 +82,43 @@
         if (!a.departAt || !a.arriveAt) continue;
         const min = U.diffMin(new Date(a.arriveAt), new Date(a.departAt));
         if (min < 3 || min > 300) continue;   // 잘못 누른 기록은 빼기
-        out.push({ s, min, origin: this.key(s.origin), at: a.departAt });
+        out.push({ s, min, origin: this.key(s.origin), at: a.departAt, slot: this.slot(a.departAt).key });
       }
       return out.sort((x, y) => String(y.at).localeCompare(String(x.at)));
     },
 
     /** 같은 길의 실제 이동 시간 평균 — { n, avg, mins, sameOrigin } 또는 null */
-    travel(list, messages, { origin, location } = {}) {
+    travel(list, messages, { origin, location, at } = {}) {
       const all = this.samples(list, messages, location);
-      const same = all.filter(x => origin && x.origin === this.key(origin));
-      const sameOrigin = same.length >= this.MIN_SAMPLES;
-      const use = (sameOrigin ? same : all).slice(0, 5);
-      if (use.length < this.MIN_SAMPLES) return null;
+      const ok = x => x.length >= this.MIN_SAMPLES;
+      const o = this.key(origin);
+      const sl = at ? this.slot(at) : null;
+      // 고르는 순서: 같은 시간대 + 같은 출발지 → 같은 시간대 → 같은 출발지 → 전체
+      const tries = [
+        sl && all.filter(x => x.slot === sl.key && o && x.origin === o),
+        sl && all.filter(x => x.slot === sl.key),
+        o && all.filter(x => x.origin === o),
+        all,
+      ].filter(Boolean);
+      const use = (tries.find(ok) || []).slice(0, 5);
+      if (!ok(use)) return null;
       const mins = use.map(x => x.min);
-      return { n: use.length, avg: Math.round(mins.reduce((a, b) => a + b, 0) / mins.length), mins, sameOrigin };
+      const bySlot = !!sl && use.every(x => x.slot === sl.key);
+      return { n: use.length, avg: Math.round(mins.reduce((a, b) => a + b, 0) / mins.length), mins,
+        sameOrigin: !!o && use.every(x => x.origin === o), slotLabel: bySlot ? sl.label : '' };
+    },
+
+    /** 도착 예상 — 출발 기록(대표 · 기사님)이 있고 아직 도착 전일 때. { at, min, late, learned, slotLabel } */
+    eta(s, messages = [], list = []) {
+      if (!s || !s.mode || s.mode === 'none' || !s.location || (root.Backtime && root.Backtime.isTrip && root.Backtime.isTrip(s.mode))) return null;
+      const a = this.actual(s, messages);
+      if (!a.departAt || a.arriveAt) return null;
+      const dep = new Date(a.departAt);
+      const t = this.travel(list.filter(x => x.id !== s.id), messages, { origin: s.origin, location: s.location, at: dep });
+      const min = t ? t.avg : Number(s.travelMin || 0);
+      if (!min) return null;
+      const at = U.addMin(dep, min);
+      return { at, depart: dep, min, late: U.diffMin(at, U.at(s.date, s.start)), learned: !!t, slotLabel: t ? t.slotLabel : '' };
     },
 
     /** 식사 장소별 대표님 평가 모음 */
@@ -94,9 +141,8 @@
     /** 추천: 좋았던 곳 먼저, 같은 분·같은 회사와 갔던 곳은 더 위로. 최근 '별로'는 빼기 */
     places(list, { who = '', company = '' } = {}, limit = 4) {
       const co = this.key(String(company).split(/[·,]/)[0]);
-      const pw = this.key(String(who).split(/\s/)[0]);
       const rows = [...this._placeTable(list).values()].filter(e => e.good > 0 && e.lastRating !== 'bad').map(e => {
-        const withThem = e.people.filter(p => (pw && this.key(p.who).startsWith(pw)) || (co && this.key(p.company).startsWith(co)));
+        const withThem = e.people.filter(p => (who && this.samePerson(who, p.who)) || (co && this.key(p.company).startsWith(co)));
         return { ...e, withThem: withThem.sort((a, b) => b.date.localeCompare(a.date))[0] || null, score: e.good * 2 + e.ok - e.bad * 3 + (withThem.length ? 5 : 0) };
       });
       return rows.sort((a, b) => b.score - a.score || b.last.localeCompare(a.last)).slice(0, limit);

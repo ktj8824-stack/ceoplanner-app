@@ -111,14 +111,22 @@ const App = {
     return this.hero() + `<div class="body">${this.briefCard()}${this.rateCard()}${window.AutoNav && AutoNav.promoHtml ? AutoNav.promoHtml() : ''}${this.view === 'timeline' ? this.dayList() : this.calendar()}</div>`;
   },
 
-  /** 기사님 최근 상태 한 줄 (대기 중 · 출발 · 현장 도착) */
+  /** 기사님 최근 상태 한 줄 (대기 중 · 출발 · 현장 도착) + 출발했으면 도착 예상 · 늦을 것 같으면 경고 */
   driverLine(s) {
-    if (s.mode !== 'driver' && !(s.trip && s.trip.accessMode === 'driver')) return '';
-    const st = Learn.driverStatus(s, Store.messages());
-    if (!st) return '';
+    const msgs = Store.messages();
+    const st = (s.mode === 'driver' || (s.trip && s.trip.accessMode === 'driver')) ? Learn.driverStatus(s, msgs) : null;
     const name = U.esc(this.profile().driverName || '기사');
-    const txt = { wait: '대기 중', depart: '출발했어요', arrive: '현장 도착' }[st.kind];
-    return `<p class="drv-line ${st.kind}">${Icon.svg('car', 15)} ${name}님 ${txt} · ${U.hm(new Date(st.at))}</p>`;
+    const txt = st && { wait: '대기 중', depart: '출발했어요', arrive: '현장 도착' }[st.kind];
+    const e = Learn.eta(s, msgs, Store.list());
+    let html = st && (!e || st.kind !== 'depart') ? `<p class="drv-line ${st.kind}">${Icon.svg('car', 15)} ${name}님 ${txt} · ${U.hm(new Date(st.at))}</p>` : '';
+    if (e) {
+      html += `<p class="drv-line eta ${e.late > 0 ? 'late' : ''}">${Icon.svg('car', 15)} 출발 ${U.hm(e.depart)} · 도착 예상 <b>${U.hm(e.at)}</b>${e.learned ? `<small>${e.slotLabel || '지난 기록'} 평균 ${e.min}분</small>` : ''}</p>`;
+      if (e.late > 0) {
+        const sent = msgs.some(m => m.ref === s.id && /늦을 것 같아요/.test(m.body) && m.at >= e.depart.toISOString());
+        html += `<div class="late-box"><span>${Icon.svg('alert', 16)} 약 <b>${e.late}분</b> 늦을 것 같아요</span>${s.visibility === 'private' ? '' : sent ? '<small>비서에게 알렸어요</small>' : `<button class="btn" data-latenote="${s.id}" data-min="${e.late}">비서에게 알리기</button>`}</div>`;
+      }
+    }
+    return html;
   },
 
   /** 비서가 보낸 브리핑 — 확인 대기 일정이 남아 있으면 '모두 확인' */
@@ -513,7 +521,17 @@ const App = {
       const op = (r.changes[0] || {}).op;
       const yes = !r.changes.length ? '비서에게 보내기' : op === 'cancel' ? '취소하기' : r.changes[0].schedule && !Store.get(r.changes[0].schedule.id) ? '등록하기' : '이대로 바꾸기';
       const card = add('v-card', `<span class="k">확인해 주세요</span><b>${U.esc(r.say)}</b><ul>${r.lines.map(l => `<li class="${l.startsWith('주의') ? 'warn' : ''}">${U.esc(l)}</li>`).join('')}</ul>
+        ${r.choices && r.choices.length ? `<div class="ai-pick"><span class="lbl">대표님이 좋았다고 한 곳</span>${r.choices.map((c, i) => `<button type="button" data-pick="${i}"><b>${U.esc(c.location)}</b><small>${U.esc(c.sub)}</small></button>`).join('')}</div>` : ''}
         <div class="ai-do"><button class="btn" data-no>${op === 'cancel' ? '그대로 두기' : '취소'}</button><button class="btn primary" data-yes>${yes}</button></div>`);
+      card.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => {
+        const c = r.choices[b.dataset.pick], s = r.changes[0].schedule, on = !b.classList.contains('on');
+        card.querySelectorAll('[data-pick]').forEach(x => x.classList.remove('on'));
+        if (on) {
+          b.classList.add('on');
+          const t = Learn.travel(Store.list(), Store.messages(), { origin: s.origin, location: c.location, at: U.addMin(U.at(s.date, s.start), -40) });
+          Object.assign(s, { location: c.location, mode: 'driver', travelMin: t ? t.avg : 30 });
+        } else Object.assign(s, { location: '', mode: 'none', travelMin: 0 });
+      }));
       card.querySelector('[data-no]').addEventListener('click', () => { card.querySelector('.ai-do').innerHTML = '<span class="muted small">취소했어요</span>'; });
       card.querySelector('[data-yes]').addEventListener('click', async () => {
         try {
@@ -577,6 +595,12 @@ const App = {
     on('[data-rate]', safe(async el => { await Store.setActual(el.dataset.rate, { rating: el.dataset.v, ratedAt: new Date().toISOString() }); if (el.dataset.v !== 'skip') U.toast('기억해 둘게요'); }));
     on('[data-briefview]', () => { const b = this.latestBrief(); if (b) this.modal(`<h3>${U.esc(this.profile().secretaryName || '비서')} 브리핑</h3><p class="brief-text">${U.esc(b.m.body).replace(/\n/g, '<br>')}</p><div class="modal-foot"><button class="btn" data-close>닫기</button><button class="btn primary" data-close data-ackall="${b.ymd}">모두 확인</button></div>`).querySelector('[data-ackall]').addEventListener('click', () => this.ackAll(b.ymd)); });
     on('[data-ackall]', safe(async el => this.ackAll(el.dataset.ackall)));
+    on('[data-latenote]', safe(async el => {
+      const s = Store.get(el.dataset.latenote); if (!s) return;
+      const e = Learn.eta(s, Store.messages(), Store.list());
+      await Store.send(`'${s.title}'에 약 ${el.dataset.min}분 늦을 것 같아요 (출발 ${e ? U.hm(e.depart) : ''} · 도착 예상 ${e ? U.hm(e.at) : ''}). 상대방께 전달 부탁해요.`, { ref: s.id });
+      U.toast('비서에게 알렸어요. 상대방 연락은 비서가 해요');
+    }));
     on('[data-ack]', safe(async el => { await Store.ack(el.dataset.ack); U.toast('확인했어요. 비서에게 전달됐어요'); }));
     on('[data-brief]', el => this.briefing(el.dataset.brief));
     on('[data-late]', safe(async el => { const s = Store.get(el.dataset.late); await Store.send(`'${s.title}' 10분 정도 늦을 것 같아요.`, { ref: s.id }); U.toast('비서에게 보냈어요'); }));
@@ -618,6 +642,14 @@ const App = {
         if (ms > 0 && ms < 12 * 3600e3) this._timers.push(setTimeout(() => new Notification(it.title, { body: `${s.title} · ${s.start}` }), ms));
       });
     }));
+    // 밤 9시까지 내일 브리핑을 확인하지 않았으면 한 번 알려 줌 (하루 한 번)
+    const nine = U.at(U.today(), '21:00').getTime() - now;
+    if (nine > 0) this._timers.push(setTimeout(() => {
+      const b = this.latestBrief(), key = 'CEOP_BRIEF_NOTIFIED';
+      if (!b || b.ymd !== U.addDays(U.today(), 1) || !b.pending.length || localStorage.getItem(key) === b.ymd) return;
+      localStorage.setItem(key, b.ymd);
+      new Notification('내일 일정 확인', { body: `확인 대기 ${b.pending.length}건 — 앱에서 '모두 확인'을 눌러 주세요` });
+    }, nine));
   },
 };
 
