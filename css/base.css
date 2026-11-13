@@ -67,7 +67,12 @@ a { color: inherit; }
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-.modal-back { position: fixed; inset: 0; background: rgba(15, 27, 45, .45); display: flex; align-items: flex-end; justify-content: center; z-index: 500; }
+.modal-back { position: fixed; inset: 0; background: rgba(15, 27, 45, .45); display: flex; align-items: flex-end; justify-content: center; z-index: 500;; overscroll-behavior: contain; }
+/* 아래에서 올라오는 창: 밀어 올릴 때 뒤 화면이 같이 움직이거나(안드로이드 주소창 접힘·늘어나는 효과) 창 아래로 뒤 화면이 비치지 않게
+   ① 창이 떠 있는 동안 뒤 화면 스크롤 잠금 ② 창 안에서만 스크롤 ③ 창 바탕색을 아래로 한 화면 더 이어 그림 */
+html:has(.modal-back), body:has(.modal-back) { overflow: hidden; overscroll-behavior: none; }
+.modal { overscroll-behavior: contain; }
+@media (max-width: 699px) { .modal { box-shadow: 0 100vh 0 0 var(--surface); } }
 .modal { background: var(--surface); width: 100%; max-width: 560px; max-height: 90vh; overflow: auto; border-radius: 20px 20px 0 0; padding: 22px; }
 @media (min-width: 700px) { .modal-back { align-items: center; } .modal { border-radius: var(--r-l); } }
 .modal h3 { margin: 0 0 4px; font-size: 19px; letter-spacing: -0.02em; }
