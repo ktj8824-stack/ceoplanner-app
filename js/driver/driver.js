@@ -7,7 +7,7 @@
 const Drv = {
   day: U.today(),
   STEPS: [
-    { kind: 'wait', btn: '출발지 도착 · 대기 중', done: '대기 중' },
+    { kind: 'wait', btn: '출발지 도착 · 대기 중', done: '대기' },
     { kind: 'depart', btn: '대표님 탑승 · 출발', done: '출발' },
     { kind: 'arrive', btn: '현장 도착', done: '현장 도착' },
   ],
@@ -15,7 +15,7 @@ const Drv = {
   async start() {
     const root = document.getElementById('root');
     try { await Store.init('driver'); }
-    catch (err) { root.innerHTML = `<div class="drv-empty"><p>연결하지 못했어요: ${U.esc(err.message || err)}</p></div>`; return; }
+    catch (err) { root.innerHTML = U.failBox(err); return; }
     if (Store.needsLogin) return Login.renderId(root, '기사님 로그인', () => this.start());
     Store.on(() => this.render());
     this.render();
@@ -29,12 +29,13 @@ const Drv = {
     try { const m = JSON.parse(localStorage.getItem('CEOP_DRV') || '{}'); m[id] = { ...(m[id] || {}), [kind]: new Date().toISOString() }; localStorage.setItem('CEOP_DRV', JSON.stringify(m)); } catch { /* */ }
   },
 
-  /** 대기 장소: 출발지 칸이 비면 그날 바로 앞 일정 장소 (없으면 본사) */
+  /** 대기 장소: 출발지 칸이 비면 그날 바로 앞 일정 장소 (없으면 본사).
+      '본사 15층 대회의실'처럼 층 · 회의실까지 적혀 있어도 기사님께는 건물 이름만 ('본사') */
   waitPlace(s) {
-    if (s.origin) return s.origin;
+    if (s.origin) return U.building(s.origin);
     const prev = Store.list().filter(x => x.date === s.date && x.id !== s.id && x.location && !x.masked && x.status !== 'cancelled' && (x.end || x.start) <= s.start)
       .sort((a, b) => (a.end || a.start).localeCompare(b.end || b.start)).pop();
-    return prev ? prev.location : '본사';
+    return prev ? U.building(prev.location) : '본사';
   },
 
   jobs(ymd) {

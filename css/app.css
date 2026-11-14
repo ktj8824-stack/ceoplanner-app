@@ -88,7 +88,7 @@ body.app { padding-bottom: calc(80px + var(--sab, env(safe-area-inset-bottom)));
 .cal-row .items { border-left: 2px solid var(--line); padding-left: 14px; display: grid; gap: 4px; font-size: 14px; align-content: center; min-height: 36px; }
 .cal-row .items span { display: flex; gap: 8px; }
 .cal-row .items span i { font-style: normal; color: var(--slate); font-variant-numeric: tabular-nums; min-width: 38px; }
-.cal-row .items .none { color: #A3ADBB; font-size: 13px; }
+.cal-row .items .none { color: #6B7686; font-size: 13px; }
 .cal-row .items .lock { color: var(--private); }
 .cal-week { font-size: 12px; color: var(--slate); padding: 14px 0 6px 72px; }
 
@@ -106,7 +106,8 @@ body.app { padding-bottom: calc(80px + var(--sab, env(safe-area-inset-bottom)));
 .msg .ref { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 13px; font-weight: 700; background: var(--line-2); color: var(--navy-3); border-radius: 8px; padding: 6px 10px; }
 .msg small { display: block; font-size: 11px; opacity: .6; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .composer { position: fixed; left: 0; right: 0; bottom: calc(72px + var(--sab, env(safe-area-inset-bottom))); max-width: 560px; margin: 0 auto; background: rgba(238, 240, 243, .96); backdrop-filter: blur(8px); padding: 8px 12px 10px; border-top: 1px solid var(--line); }
-.quick { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+.quick { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.quick button:last-child { margin-right: 28px; }
 .quick button { white-space: nowrap; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 13px; }
 .composer form { display: flex; gap: 8px; }
 .composer input { flex: 1; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
@@ -353,7 +354,7 @@ nav.tabs .mic-tab .mic { position: absolute; top: -30px; left: 50%; transform: t
 .v-mic { width: 84px; height: 84px; border-radius: 42px; background: #16263D; color: #C8AE7E; display: grid; place-items: center; box-shadow: 0 0 0 1px #2A3B55; transition: box-shadow .2s, background .2s; }
 .v-mic.on { background: var(--brass); color: var(--navy); box-shadow: 0 0 0 10px rgba(167, 134, 75, .18), 0 0 0 22px rgba(167, 134, 75, .08); }
 .v-hint { margin: 0; font-size: 13px; color: #9AA6B6; }
-.v-hint button { color: #C8AE7E; font-weight: 700; font-size: 13px; }
+.v-hint button { color: #C8AE7E; font-weight: 700; font-size: 14px; min-height: 44px; padding: 0 8px; }
 /* 대비 · 누르는 크기 보정 */
 .tl-t.past { color: #5F6B7D; }
 .tl-item.past { background: #E9ECF0; }
@@ -443,9 +444,9 @@ nav.tabs .mic-tab > span:last-child { transform: translateY(16px); }
 .anp-ic { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--brass-ink); color: #fff; }
 .anp-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .anp-t b { font-size: 14.5px; font-weight: 700; letter-spacing: -0.3px; }
-.anp-t small { font-size: 12px; color: #C3CBD6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.anp-t small { font-size: 12px; color: #C3CBD6; }
 .anp-btn { flex: none; height: 30px; padding: 0 10px; border-radius: 9px; background: #fff; color: var(--navy); font-size: 13px; font-weight: 700; display: grid; place-items: center; }
-.anp-x { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 30px; height: 30px; border: 0; background: transparent; color: #8A96A8; font-size: 14px; cursor: pointer; }
+.anp-x { position: absolute; top: 50%; right: 2px; transform: translateY(-50%); width: 40px; height: 44px; border: 0; background: transparent; color: #B4BECC; font-size: 15px; cursor: pointer; }
 .an-g-guide { display: flex; width: 100%; margin-top: 14px; text-decoration: none; }
 
 /* 기사님 상태 한 줄 (대기 중 · 출발 · 현장 도착) */

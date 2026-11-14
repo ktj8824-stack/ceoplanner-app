@@ -26,7 +26,7 @@ const Login = {
             <span class="ico brass">${Icon.svg('file', 24)}</span>
             <span class="t"><b>처음이에요 · 회사 등록</b><small>사업자번호로 가입 · ${Plan.PRICES.trialDays}일 무료 체험</small></span>${chev}
           </button>
-          <button type="button" class="auth-demo" data-demo>${Icon.svg('bolt', 16)} 데모 대표 계정으로 둘러보기</button>
+          <button type="button" class="auth-demo" data-demo>${Icon.svg('bolt', 16)} 데모 ${Store.role === 'secretary' ? '비서' : Store.role === 'driver' ? '기사' : '대표'} 계정으로 둘러보기</button>
         </div>
         <footer class="auth-foot">
           <span>카카오 · 구글 로그인 없이, 회사가 만든 아이디로만 들어와요</span>
@@ -47,7 +47,7 @@ const Login = {
         <div class="auth-title"><h1>회사에서 받은<br>아이디로 로그인</h1><p>${who} 모두 같은 화면이에요</p></div>
         <form id="loginForm" autocomplete="on" class="auth-fields">
           <label>아이디<input type="text" name="uid" required autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="latin"></label>
-          <label>비밀번호<input type="password" name="pw" required autocomplete="current-password" placeholder="8자 이상"></label>
+          <label>비밀번호<input type="password" name="pw" required autocomplete="current-password"></label>
           <p class="login-err" id="loginErr" role="alert">${U.esc(Store.loginError || '')}</p>
           <button class="auth-primary" type="submit">로그인</button>
         </form>
@@ -140,14 +140,27 @@ const Login = {
     root.querySelector('[data-back]').addEventListener('click', () => this.render(root, title, onDone));
     root.querySelector('[data-tologin]').addEventListener('click', () => this.renderId(root, title, onDone));
 
+    // 잘못된 칸: 그 칸을 빨갛게 + 칸 바로 아래에 안내 + 화면을 그 칸으로 (맨 아래 안내만 있으면 못 봐요)
+    const mark = (input, msg) => {
+      f.querySelectorAll('.invalid').forEach(x => x.classList.remove('invalid'));
+      f.querySelectorAll('.field-err').forEach(x => x.remove());
+      err.textContent = msg;
+      if (!input) return;
+      input.classList.add('invalid');
+      const at = input.type === 'checkbox' ? input.closest('label') : input;
+      at.insertAdjacentHTML('afterend', `<small class="field-err" role="alert">${U.esc(msg)}</small>`);
+      input.focus({ preventScroll: true });
+      at.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      input.addEventListener('input', () => { input.classList.remove('invalid'); const n = at.nextElementSibling; if (n && n.classList.contains('field-err')) n.remove(); }, { once: true });
+    };
     f.addEventListener('submit', async e => {
       e.preventDefault();
-      err.textContent = '';
+      mark(null, '');
       const sec = f.who.value === 'secretary';
       const bad = [...f.querySelectorAll('input')].find(i => !i.closest('[hidden]') && !i.checkValidity());
-      if (bad) { bad.focus(); err.textContent = bad.name === 'agree' ? '개인정보 처리방침에 동의해 주세요.' : `'${bad.closest('label').firstChild.textContent.replace(/\(선택\)/, '').trim()}' 칸을 확인해 주세요.`; return; }
-      if (!this.bizOk(f.bizNo.value)) { f.bizNo.focus(); err.textContent = '사업자등록번호를 다시 확인해 주세요.'; return; }
-      if (f.myPw.value !== f.myPw2.value) { f.myPw2.focus(); err.textContent = '비밀번호 확인이 달라요.'; return; }
+      if (bad) return mark(bad, bad.name === 'agree' ? '개인정보 처리방침에 동의해 주세요.' : `'${bad.closest('label').firstChild.textContent.replace(/\(선택\)/, '').trim()}' 칸을 확인해 주세요.`);
+      if (!this.bizOk(f.bizNo.value)) return mark(f.bizNo, '사업자등록번호를 다시 확인해 주세요.');
+      if (f.myPw.value !== f.myPw2.value) return mark(f.myPw2, '비밀번호 확인이 달라요.');
       const form = {
         bizNo: f.bizNo.value, ceoName: f.ceoName.value.trim(), address: f.address.value.trim(), bizName: f.bizName.value.trim(), agree: true,
         signer: { role: f.who.value, name: sec ? f.myName.value.trim() : f.ceoName.value.trim(), loginId: f.myId.value.trim().toLowerCase(), password: f.myPw.value, phone: f.myPhone.value.trim() },

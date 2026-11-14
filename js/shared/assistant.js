@@ -94,6 +94,17 @@
       return null;
     },
 
+    /** '늦어요'를 알릴 다음 일정: 아직 시작 전이거나, 시작했어도 이동 중(도착 기록 없음)인 일정 */
+    nextToReach(list, now) {
+      const t = U.ymd(now);
+      for (const ymd of [t, U.addDays(t, 1)]) {
+        const hit = Backtime.planDay(list.filter(s => s.date === ymd && !this.isPrivate(s)))
+          .find(({ s, p }) => p.endAt > now && !(p.startAt <= now && (s.mode === 'none' || !s.mode || (s.actual && s.actual.arriveAt))));
+        if (hit) return hit.s;
+      }
+      return null;
+    },
+
     /** 말에서 일정 고르기: (날짜를 말했으면 그날 안에서) 제목 단어 → 분류 단어 → 다음 일정 */
     pick(t, list, now, ymd) {
       if (ymd) list = list.filter(s => s.date === ymd);
@@ -148,11 +159,11 @@
         if (+m[1] < now.getMonth() + 1) y += 1;
         return U.ymd(new Date(y, +m[1] - 1, +m[2]));
       }
-      m = t.match(/(다음\s*주|담주)?\s*([일월화수목금토])요일/);
+      m = t.match(/(다다음\s*주|다음\s*주|담주)?\s*([일월화수목금토])요일/);
       if (m) {
         const target = WEEK.indexOf(m[2]);
-        if (m[1]) { // 다음 주 = 월요일 시작 기준 다음 주
-          const nextMon = U.addDays(today, 7 - ((now.getDay() + 6) % 7));
+        if (m[1]) { // 다음 주 = 월요일 시작 기준 다음 주 · 다다음 주 = 그다음 주
+          const nextMon = U.addDays(today, 7 - ((now.getDay() + 6) % 7) + (/다다음/.test(m[1]) ? 7 : 0));
           return U.addDays(nextMon, (target + 6) % 7);
         }
         return U.addDays(today, (target - now.getDay() + 7) % 7);
@@ -190,7 +201,9 @@
 
     // ───────── 지연: "길 막혀서 15분 늦어" ─────────
     delay(t, list, now, ctx) {
-      const s = this.upcoming(list, now, true);   // 개인 일정은 비서·상대방에게 알릴 일이 아님
+      // 개인 일정은 비서·상대방에게 알릴 일이 아님. 이미 시작한 사내 회의 · 이미 도착한 일정에는 늦을 수 없으니 그다음 일정
+      const named = this.named(t, list, now) ? this.pick(t, list.filter(x => !this.isPrivate(x)), now, null) : null;
+      const s = named || this.nextToReach(list, now);
       if (!s) return { kind: 'answer', say: '지금 늦을 일정이 없어요.' };
       const n = this.minutes(t) || 10;
       const reason = /막혀|막힘|교통|차가/.test(t) ? '교통 체증으로 ' : '';
@@ -211,6 +224,7 @@
       const s = this.pick(t, list, now, ymd);
       if (!s) return { kind: 'answer', say: '바꿀 일정을 찾지 못했어요. 일정 이름을 같이 말씀해 주세요.' };
       if (s.masked) return { kind: 'answer', say: '그 일정은 바꿀 수 없어요.' };
+      if (/장소|식당|가게|곳/.test(t) && !this.minutes(t) && !this.time(t)) return this.place(t, s);
       const dur = U.diffMin(U.at(s.date, s.end || s.start), U.at(s.date, s.start));
       let start = null;
       const abs = /(로|으로)\s*(미뤄|옮겨|바꿔|변경)|에\s*(해|하자)/.test(t) ? this.time(t) : null;
@@ -232,6 +246,29 @@
         lines: [`${s.title}`, `${s.start}–${s.end} → ${start}–${end}`, ...warns.map(w => `주의: ${w.msg}`), priv ? '개인 일정이라 비서에게는 알리지 않아요' : '바꾸면 비서에게 자동으로 알려요'],
         changes: [{ op: 'upsert', schedule: next }],
         notify: priv ? null : { body: `대표님이 '${s.title}' 시간을 ${s.start} → ${this.ro(start)} 바꿨어요. 상대방께 전달 부탁해요.`, ref: s.id },
+      };
+    },
+
+    // ───────── 장소: "투자사 점심 장소 바꿔 줘" · "점심 장소 소담으로 바꿔 줘" ─────────
+    place(t, s) {
+      const m = t.match(/(?:장소|식당|곳)\s*(?:을|를)?\s*(.+?)\s*(?:으로|로)\s*(?:바꿔|옮겨|변경)/);
+      const to = m ? m[1].trim() : '';
+      const priv = this.isPrivate(s);
+      if (to) {
+        const next = { ...s, location: to };
+        return {
+          kind: 'action', say: `${this.eul(s.title)} 장소를 '${to}'${this.batchim(to) ? '으로' : '로'} 바꿀까요?`,
+          lines: [s.title, `${s.location || '장소 없음'} → ${to}`, priv ? '개인 일정이라 비서에게는 알리지 않아요' : '바꾸면 비서에게 이동 시간 확인을 부탁해요'],
+          changes: [{ op: 'upsert', schedule: next }],
+          notify: priv ? null : { body: `대표님이 '${s.title}' 장소를 '${to}'(으)로 바꿨어요. 이동 시간 · 상대방 연락 확인 부탁해요.`, ref: s.id },
+        };
+      }
+      if (priv) return { kind: 'answer', say: `${this.eul(s.title)} 어디로 바꿀지 같이 말씀해 주세요. 예: "장소 소담으로 바꿔 줘"` };
+      return {
+        kind: 'action', say: `'${s.title}' 장소를 바꿔 달라고 비서에게 부탁할게요.`,
+        lines: [`${s.title} · 지금 장소 ${s.location || '없음'}`, '비서가 새 장소를 정하고 상대방께 연락해요'],
+        changes: [],
+        notify: { body: `대표님이 '${s.title}' (${this.when(s)}) 장소를 바꿔 달라고 하셨어요. 새 장소를 정해서 알려 주세요.`, ref: s.id },
       };
     },
 
@@ -284,9 +321,11 @@
       const locM = t.match(/([^\s,]+(?:\s[^\s,]+)?)\s*에서/);
       let location = locM ? locM[1] : '';
       // '최상무님이랑' · '정민호 부사장님과' → 만날 분 (제목에서는 빼기)
-      const whoM = t.match(/([가-힣]{1,4}(?:\s[가-힣]{1,4})?님)\s*(?:이랑|랑|과|와|하고|이랑은)/);
-      const who = whoM ? whoM[1].replace(/님$/, '') : '';
-      let title = this.titleOf(whoM ? t.replace(whoM[0], ' ') : t, locM) || '새 일정';
+      // 날짜·시각을 먼저 지운 말에서 찾아요 ('저녁 7시 최상무님이랑' 에서 '시'가 이름에 붙지 않게)
+      const bare = this.stripWhen(t);
+      const whoM = this.whoOf(bare);
+      const who = whoM ? whoM.name : '';
+      let title = this.titleOf(whoM ? bare.replace(whoM.raw, ' ') : bare, locM) || '새 일정';
       let category = 'external';
       for (const [re, cat] of CAT_WORDS) if (re.test(title)) { category = cat; break; }
       // '남서울 골프' 처럼 골프 앞 낱말은 골프장 이름으로 보고 장소에 넣음 (비서가 확인)
@@ -294,6 +333,9 @@
       if (category === 'golf' && !location) {
         const g = title.match(/([^\s]+?)\s*(?:CC|cc|컨트리클럽|골프장)?\s*(?:골프|라운딩)/);
         if (g && g[1] && !/^(골프|라운딩)$/.test(g[1])) { location = g[1].replace(/(CC|cc)$/, '') + (/(CC|cc|컨트리|골프장)/.test(g[1]) ? '' : 'CC'); guessed = true; }
+        // '골프 레이크사이드' 처럼 골프 뒤에 이름이 오면 그게 골프장 → 제목은 '골프'만
+        const g2 = !location && title.match(/^(골프|라운딩)\s+([^\s]+?)(CC|cc|컨트리클럽|골프장)?$/);
+        if (g2) { location = g2[2] + 'CC'; title = g2[1]; guessed = true; }
       }
       // '삼성동 미팅' 처럼 동네 이름 + 미팅이면 장소로
       if (!location && /^[가-힣]+동\s/.test(title)) location = title.split(' ')[0];
@@ -321,11 +363,26 @@
       };
     },
 
+    /** 날짜·시각 말 지우기 ('금요일 저녁 7시에' → ' ') */
+    stripWhen(t) {
+      return t
+        .replace(/(다다음\s*주|다음\s*주|담주)?\s*[일월화수목금토]요일|오늘|내일|모레|\d{1,2}\s*월\s*\d{1,2}\s*일|\d{1,2}\s*일/g, ' ')
+        .replace(/(오전|오후|아침|저녁|밤|낮|새벽)?\s*\d{1,2}\s*시\s*(반|\d{1,2}\s*분)?(에|쯤|경)?|\d{1,2}:\d{2}(에)?/g, ' ');
+    },
+
+    /** '최상무님이랑' · '정민호 부사장님과' → { raw, name } — 앞의 '에서·점심' 같은 말은 이름에서 빼요 */
+    whoOf(t) {
+      const m = t.match(/([가-힣]{2,4}(?:\s[가-힣]{2,4})?)님\s*(?:이랑|랑|과|와|하고)/);
+      if (!m) return null;
+      let name = m[1];
+      const parts = name.split(' ');
+      if (parts.length === 2 && /^(에서|에게|점심|저녁|아침|오전|오후|식사|미팅|회의|골프|그리고)$/.test(parts[0])) name = parts[1];
+      return { raw: m[0].slice(m[0].indexOf(name)), name };
+    },
+
     /** 말에서 날짜·시각·장소·동사를 빼고 남은 일정 이름 */
     titleOf(t, locM) {
-      return t
-        .replace(/(다음\s*주|담주)?\s*[일월화수목금토]요일|오늘|내일|모레|\d{1,2}\s*월\s*\d{1,2}\s*일|\d{1,2}\s*일/g, ' ')
-        .replace(/(오전|오후|아침|저녁|밤|낮|새벽)?\s*\d{1,2}\s*시\s*(반|\d{1,2}\s*분)?|\d{1,2}:\d{2}/g, ' ')
+      return this.stripWhen(t)
         .replace(locM ? locM[0] : /$^/, ' ')
         .replace(/(잡아|추가해|등록해|넣어|만들어)\s*(줘|주세요|줄래|라)?|일정|에\b|,/g, ' ')
         .replace(/\s+/g, ' ').trim().replace(/^에\s*/, '').replace(/\s*(을|를)$/, '');
@@ -340,6 +397,9 @@
       const at = d => (U.ymd(d) !== ymd ? (U.ymd(d) === U.ymd(now) ? '오늘 밤 ' : '전날 ') : '') + U.hm(d);
       if (/끝나|마치|퇴근/.test(t)) {
         if (!day.length) return { kind: 'answer', say: `${rel}은 일정이 없어요.` };
+        // '점심 몇 시에 끝나?' 처럼 일정을 말하면 그 일정이 끝나는 시각
+        const one = this.named(t, list.filter(x => x.date === ymd), U.at(ymd, '00:00')) && this.pick(t, list, U.at(ymd, '00:00'), ymd);
+        if (one) { const hit = day.find(x => x.s.id === one.id); if (hit) return { kind: 'answer', say: `'${one.title}'${this.batchim(one.title) ? '은' : '는'} ${U.ymd(hit.p.endAt) !== ymd ? '다음 날 ' : ''}${U.hm(hit.p.endAt)}에 끝나요.` }; }
         const last = day.reduce((m, x) => x.p.endAt > m.p.endAt ? x : m);
         return { kind: 'answer', say: `${rel} 마지막 일정은 '${last.s.title}'이고 ${U.ymd(last.p.endAt) !== ymd ? '다음 날 ' : ''}${U.hm(last.p.endAt)}에 끝나요.` };
       }
@@ -349,8 +409,13 @@
         const { s, p } = first;
         return { kind: 'answer', say: `${rel} ${ymd === U.ymd(now) ? '다음' : '첫'} 출발은 ${at(p.leaveAt)}이에요. '${s.title}' ${s.start} 시작${p.driverCallAt ? `, 기사님은 ${at(p.driverCallAt)}부터 대기` : ''}${p.wakeAt ? `, 기상은 ${at(p.wakeAt)}` : ''}.` };
       }
-      if (!day.length) return { kind: 'answer', say: `${rel}은 일정이 없어요.` };
-      return { kind: 'answer', say: `${rel} 일정 ${day.length}건이에요. ` + day.map(({ s }) => `${s.start} ${s.title}`).join(' · ') };
+      // '오늘 밤 · 저녁 · 오전 · 오후 일정' → 그 시간대만
+      const PART = [[/밤|저녁/, '저녁', x => x.s.start >= '17:00'], [/오전|아침/, '오전', x => x.s.start < '12:00'], [/오후/, '오후', x => x.s.start >= '12:00']];
+      const part = PART.find(([re]) => re.test(t));
+      const pick = part ? day.filter(part[2]) : day;
+      const lbl = part ? `${rel} ${part[1]}` : rel;
+      if (!pick.length) return { kind: 'answer', say: `${lbl}에는 일정이 없어요.` };
+      return { kind: 'answer', say: `${lbl} 일정 ${pick.length}건이에요. ` + pick.map(({ s }) => `${s.start} ${s.title}`).join(' · ') };
     },
   };
 

@@ -105,14 +105,16 @@
       return { arriveBy, leaveAt, driverCallAt, wakeAt, startAt, endAt, items, warn };
     },
 
-    /** 하루 일정 전체 역산 (첫 이동 일정에 기상 시각을 붙임) */
+    /** 하루 일정 전체 역산 — 기상은 그날 첫 일정이 이동 일정일 때만.
+        앞에 사내 회의가 있으면 대표님은 이미 회사에 있으니 뒤 일정에 기상을 붙이지 않아요.
+        (대표 개인 일정 · 취소된 일정은 '앞 일정'으로 치지 않음) */
     planDay(list, opts = {}) {
       const sorted = [...list].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
       let first = true;
       return sorted.map(s => {
         const moving = s.mode && s.mode !== 'none';
         const p = this.plan(s, { ...opts, firstOfDay: first && moving });
-        if (moving) first = false;
+        if (moving || (s.category !== 'personal' && !s.masked && s.status !== 'cancelled')) first = false;
         return { s, p };
       });
     },
@@ -138,7 +140,7 @@
             a: prev.s, b: cur.s, shortMin: short,
             msg: overlap
               ? `${a}${this.wa(prev.s.title)} '${cur.s.title}' 시간이 겹쳐요`
-              : `${a} 끝나고 '${cur.s.title}'까지 이동 시간이 ${short}분 부족해요`,
+              : `${a} 끝나고 '${cur.s.title}'까지 이동 시간이 ${U.durLabel(short)} 부족해요`,
           });
         }
       }

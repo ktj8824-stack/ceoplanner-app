@@ -23,6 +23,11 @@ const Store = {
     const cfg = window.CEOP_CONFIG || {};
     let forced = false; try { forced = localStorage.getItem('CEOP_DEMO') === '1'; } catch { /* 저장소 막힘 */ }
     this.forcedDemo = forced;
+    // 서버 주소가 있는데 연결 프로그램을 못 받았으면(인터넷이 약함) 데모로 빠지지 말고 멈춰서 알려요
+    // (그대로 두면 '김대표님' 데모 일정이 진짜처럼 보여요)
+    if (!forced && cfg.SUPABASE_URL && cfg.SUPABASE_KEY && !window.supabase) {
+      const err = new Error('인터넷 연결이 약해서 서버에 연결하지 못했어요. 연결을 확인하고 다시 열어 주세요.'); err.offline = true; throw err;
+    }
     if (!forced && cfg.SUPABASE_URL && cfg.SUPABASE_KEY && window.supabase) {
       this.mode = 'supabase';
       this.client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_KEY);

@@ -21,7 +21,7 @@ const App = {
     const root = document.getElementById('root');
     this.applySize();
     try { await Store.init('ceo'); }
-    catch (e) { root.innerHTML = `<p style="padding:20px">연결 오류: ${U.esc(e.message || e)}</p>`; return; }
+    catch (e) { root.innerHTML = U.failBox(e); return; }
     if (Store.needsLogin) {
       document.getElementById('tabs').hidden = true;   // 로그인 · 가입 중에는 아래 메뉴 숨김
       return Login.render(root, 'CEO플래너 로그인', () => this.boot());
@@ -194,12 +194,15 @@ const App = {
     let cur = overdue ? leaveIdx : steps.findIndex(st => st.at > now);   // 지금 기다리는 단계 (-1 = 모두 지남 → 진행 중)
     if (departed && leaveIdx >= 0 && cur >= 0 && cur <= leaveIdx) cur = leaveIdx + 1 < steps.length ? leaveIdx + 1 : -1;
     const target = cur >= 0 ? steps[cur] : null;
-    const left = target ? U.diffMin(target.at, now) : 0;
-    const pill = overdue ? `출발 ${U.durLabel(overdue)} 지남` : !target ? `${s.end}까지 진행 중` : left < 60 ? `${target.label} ${left}분 전` : `${target.label}까지 ${U.durLabel(left)}`;
+    // 출발이 기록됐으면 '도착'은 원래 계획 대신 도착 예상 시각으로 (아래 '도착 예상' 줄과 같은 숫자)
+    const eta = target && target.kind === 'arrive' && departed ? Learn.eta(s, Store.messages(), Store.list()) : null;
+    const left = target ? U.diffMin(eta ? eta.at : target.at, now) : 0;
+    const tLabel = eta ? '도착 예상' : target && target.label;
+    const pill = overdue ? `출발 ${U.durLabel(overdue)} 지남` : !target ? `${s.end}까지 진행 중` : left <= 0 && eta ? '곧 도착' : left < 60 ? `${tLabel} ${left}분 전` : `${tLabel}까지 ${U.durLabel(left)}`;
     // 내일 새벽 일정인데 기사 호출·출발이 오늘 밤이면 '오늘 밤'을 앞에
     const tonight = s.date !== U.today() && steps.some(st => U.ymd(st.at) === U.today());
     const leaveStep = steps.find(st => st.kind === 'leave');
-    const headLabel = s.date === U.today() ? '다음 일정' : tonight && leaveStep ? '오늘 밤 출발 · 내일' : '내일 첫 일정';
+    const headLabel = s.date === U.today() ? (pl.startAt <= now ? '지금 일정' : '다음 일정') : tonight && leaveStep ? '오늘 밤 출발 · 내일' : '내일 첫 일정';
     const mode = Backtime.MODES[s.mode] || Backtime.MODES.none;
     const sub = [s.location ? U.esc(s.location) : '', s.mode !== 'none' ? `<span class="nw">${mode.label}${s.travelMin ? ' ' + U.durLabel(s.travelMin) : ''}</span>` : ''].filter(Boolean).join(' · ');
     const fill = steps.length > 1 ? (cur < 0 ? 1 : cur / (steps.length - 1)) : 0;
@@ -208,7 +211,8 @@ const App = {
     const acts = [];
     if (s.mode === 'driver' && p.driverPhone) acts.push(`<a class="na light" href="${U.telLink(p.driverPhone)}">${Icon.svg('phone', 16)} ${U.esc(p.driverName || '기사')}님</a>`);
     else if (s.briefing && s.briefing.who) acts.push(`<button class="na light" data-brief="${s.id}">${Icon.svg('file', 16)} 미팅 브리핑</button>`);
-    else if (s.location) acts.push(`<a class="na light" href="${U.tmapLink(s.location)}">${Icon.svg('nav', 16)} 길안내</a>`);
+    else if (s.location && s.mode !== 'none') acts.push(`<a class="na light" href="${U.tmapLink(s.location)}">${Icon.svg('nav', 16)} 길안내</a>`);
+    else if (!priv) acts.push(`<button class="na light" data-tabgo="chat">${Icon.svg('chat', 16)} 비서톡</button>`);   // 회사 안 회의: 길안내 대신
     const act = this.actualOf(s);
     const canArrive = !overdue && departed && !act.arriveAt && s.mode !== 'none' && !mode.trip && pl.startAt > now;
     if (overdue) acts.unshift(`<button class="na light" data-departed="${s.id}">${Icon.svg('check', 16)} 출발했어요</button>`);
@@ -302,7 +306,7 @@ const App = {
     const acts = [];
     if (!priv && !s.ackAt) acts.push(`<button class="primary" data-ack="${s.id}">확인</button>`);
     if (s.briefing && s.briefing.who) acts.push(`<button data-brief="${s.id}">${Icon.svg('file', 16)} 브리핑</button>`);
-    if (s.location) acts.push(`<a href="${U.tmapLink(s.location)}">${Icon.svg('nav', 16)} 길안내</a>`);
+    if (s.location && go) acts.push(`<a href="${U.tmapLink(s.location)}">${Icon.svg('nav', 16)} 길안내</a>`);
     if (!priv) acts.push(`<button data-postpone="${s.id}" ${this.sentAbout(s.id, '미뤄') ? 'disabled' : ''}>${this.sentAbout(s.id, '미뤄') ? '변경 요청 보냄' : '변경 요청'}</button>`);
     else acts.push(`<button data-delprivate="${s.id}">삭제</button>`);
     return `<article class="card ${isNext ? 'is-next' : ''} ${priv ? 'private' : ''}">
@@ -558,7 +562,15 @@ const App = {
         rec = new SR(); rec.lang = 'ko-KR'; rec.interimResults = false;
         mic.classList.add('on'); state.textContent = '듣고 있어요';
         rec.onresult = e => ask(e.results[0][0].transcript);
-        rec.onerror = () => { state.textContent = '잘 못 들었어요. 다시 눌러 말씀해 주세요'; };
+        rec.onerror = e => {
+          // 마이크 권한이 없거나 쓸 수 없으면 바로 글로 쓰기로 (열자마자 '잘 못 들었어요'가 뜨지 않게)
+          if (['not-allowed', 'service-not-allowed', 'audio-capture', 'network'].includes(e && e.error)) {
+            state.textContent = '마이크를 쓸 수 없어요 · 아래에 글로 적어 주세요'; f.hidden = false; mic.hidden = true;
+            const h = back.querySelector('.v-hint'); if (h) h.hidden = true;
+            return;
+          }
+          state.textContent = e && e.error === 'no-speech' ? '말씀이 들리지 않았어요. 마이크를 눌러 다시 말씀해 주세요' : '잘 못 들었어요. 마이크를 눌러 다시 말씀해 주세요';
+        };
         rec.onend = () => { mic.classList.remove('on'); if (state.textContent === '듣고 있어요') state.textContent = '마이크를 눌러 말씀해 주세요'; };
         rec.start();
       } catch { state.textContent = '마이크를 쓸 수 없어요. 글로 적어 주세요'; f.hidden = false; }

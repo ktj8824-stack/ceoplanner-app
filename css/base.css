@@ -34,6 +34,7 @@ html, body { margin: 0; padding: 0; }
 body {
   font-family: var(--font); background: var(--porcelain); color: var(--ink);
   font-size: 15px; line-height: 1.5; letter-spacing: -0.01em;
+  word-break: keep-all; overflow-wrap: break-word;   /* 한국어: 단어 중간에서 줄 바꾸지 않기 ('있 / 어요' 방지) */
   -webkit-font-smoothing: antialiased; font-feature-settings: 'tnum' 1;
 }
 button { font: inherit; cursor: pointer; border: 0; background: none; color: inherit; letter-spacing: inherit; }
@@ -163,3 +164,6 @@ html:has(.modal-back), body:has(.modal-back) { overflow: hidden; overscroll-beha
 .auth.login .auth-switch { margin-top: 0; padding-top: 8px; }
 .auth.login .auth-title { margin-top: 0; }
 body.sec .auth-start::before { height: 44vh; }
+/* 가입: 잘못된 칸 표시 */
+.auth input.invalid, .auth input.invalid:focus { border-color: var(--signal); box-shadow: 0 0 0 3px rgba(180, 68, 46, .14); }
+.auth .field-err { display: block; margin: 4px 0 0; color: var(--signal); font-size: 13px; font-weight: 600; }

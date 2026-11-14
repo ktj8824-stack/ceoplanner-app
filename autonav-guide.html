@@ -8,16 +8,15 @@
 <meta property="og:title" content="차에 타면, 다음 일정으로 길안내가 저절로 — CEO플래너">
 <meta property="og:description" content="앱을 열 필요도 없어요. 차에 타는 순간 내비가 다음 목적지로 켜집니다. 1분 설정 가이드.">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css">
 <style>
 :root{--ink:#14161A;--sub:#4A4F5A;--mute:#6B7180;--line:#E6E7EB;--bg:#F6F7F9;--acc:#0F1B2D;--acc-ink:#1B2B44;--acc-bg:#F3EDE1;--ok:#1F7A4C;--ok-bg:#E7F4EC;--warn:#9A4A06;--warn-bg:#FDF1E3}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{margin:0;background:#fff;color:var(--ink);font-family:'IBM Plex Sans KR',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:16px;line-height:1.65;word-break:keep-all;overflow-wrap:break-word;-webkit-font-smoothing:antialiased}
+body{margin:0;background:#fff;color:var(--ink);font-family:'Pretendard Variable','Pretendard',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:16px;line-height:1.65;word-break:keep-all;overflow-wrap:break-word;-webkit-font-smoothing:antialiased}
 a{color:var(--acc)}
 .in{max-width:1080px;margin:0 auto;padding:0 20px}
-.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.mono{font-family:ui-monospace,Menlo,monospace}
 :focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:6px}
 
 .top{position:sticky;top:0;z-index:20;padding-top:env(safe-area-inset-top);background:rgba(255,255,255,.96);border-bottom:1px solid var(--line)}
@@ -83,7 +82,7 @@ h1 em{font-style:normal;color:#80632C}
 .card h3{margin:0 0 6px;font-size:17px}
 .card p{margin:0;color:var(--sub);font-size:14.5px}
 .linkbox{display:flex;gap:8px;align-items:center;margin-top:12px}
-.linkbox input{flex:1;min-width:0;height:44px;border:1px solid var(--line);border-radius:10px;padding:0 12px;font-size:13.5px;background:var(--bg);color:var(--ink);font-family:'IBM Plex Mono',monospace}
+.linkbox input{flex:1;min-width:0;height:44px;border:1px solid var(--line);border-radius:10px;padding:0 12px;font-size:13.5px;background:var(--bg);color:var(--ink);font-family:ui-monospace,Menlo,monospace}
 .tag{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:2px 7px;margin-right:6px;vertical-align:1px}
 .tag.ios{background:#EDEDF0;color:#14161A}.tag.and{background:#E7F4EC;color:var(--ok)}
 
@@ -101,7 +100,7 @@ h1 em{font-style:normal;color:#80632C}
 .mini .row.hl{outline:2px solid var(--acc);background:#fff;font-weight:700;color:var(--ink)}
 .mini .tabbar{display:flex;justify-content:space-around;margin-top:10px;border-top:1px solid var(--line);padding-top:7px;color:var(--mute);font-size:10.5px}
 .mini .tabbar b{color:var(--acc)}
-.mini .url{margin-top:6px;border:1px dashed var(--acc);border-radius:8px;padding:7px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--acc-ink);background:var(--acc-bg);word-break:break-all}
+.mini .url{margin-top:6px;border:1px dashed var(--acc);border-radius:8px;padding:7px;font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--acc-ink);background:var(--acc-bg);word-break:break-all}
 .mini .chk{width:14px;height:14px;border-radius:50%;background:var(--acc);display:inline-block;flex:none}
 .mini .plus{margin-left:auto;width:22px;height:22px;border-radius:50%;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
 .step .txt{padding:14px 16px 16px}

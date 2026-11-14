@@ -21,15 +21,23 @@ body.driver { background: var(--porcelain, #F4F5F7); }
 .dc-pill.soon { background: var(--brass-ink); color: #fff; }
 .dc-route { display: grid; grid-template-columns: 76px 1fr; gap: 6px 10px; margin: 14px 0 0; font-size: 16px; }
 .dc-route dt { color: var(--slate); font-weight: 600; }
-.dc-route dd { margin: 0; color: var(--ink); }
+.dc-route dd { margin: 0; color: var(--ink); min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
 .dc-steps { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 0; margin: 16px 0 0; }
 .dc-steps li { display: grid; justify-items: center; gap: 4px; font-size: 13px; color: var(--slate); text-align: center; }
 .dc-steps li i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; color: #fff; }
 .dc-steps li.done i { background: var(--ok); border-color: var(--ok); }
 .dc-steps li.now i { border-color: var(--navy); }
-.dc-steps li.now span { color: var(--ink); font-weight: 700; }
+.dc-steps li.now span { color: var(--ink); }
+.dc-steps li.done span { color: var(--ink); font-weight: 700; }
 .dc-steps li b { font-size: 13px; color: var(--ok); min-height: 16px; }
-.dc-acts { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 14px; align-items: center; }
+.dc-acts { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 14px; align-items: center; }
+.dc-acts .btn.big { white-space: normal; line-height: 1.25; }
+@media (max-width: 359px) {
+  .dc-route { grid-template-columns: 64px 1fr; font-size: 15px; }
+  .dc-call b { font-size: 30px; }
+  .drv-head h1 { font-size: 21px; }
+  .dc-acts .btn { padding: 0 12px; }
+}
 .dc-acts .btn { height: 52px; font-size: 16px; }
 .dc-acts .btn.big { font-size: 17px; font-weight: 800; }
 .dc-done { margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ok); font-weight: 700; }

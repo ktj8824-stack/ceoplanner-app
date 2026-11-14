@@ -89,7 +89,7 @@
     async start() {
       const root = document.getElementById('root');
       try { await Store.init(this.from === 'web' ? 'secretary' : 'ceo'); }
-      catch (e) { root.innerHTML = `<p class="err">연결 오류: ${U.esc(e.message || e)}</p>`; return; }
+      catch (e) { root.innerHTML = U.failBox(e); return; }
       if (Store.needsLogin) return Login.render(root, '결제하려면 로그인해 주세요', () => this.route());
       this.route();
     },
