@@ -167,3 +167,9 @@ body.sec .auth-start::before { height: 44vh; }
 /* 가입: 잘못된 칸 표시 */
 .auth input.invalid, .auth input.invalid:focus { border-color: var(--signal); box-shadow: 0 0 0 3px rgba(180, 68, 46, .14); }
 .auth .field-err { display: block; margin: 4px 0 0; color: var(--signal); font-size: 13px; font-weight: 600; }
+/* 회원 탈퇴 */
+.withdraw-back { align-items: center; padding: 16px; }
+.btn.danger { background: var(--signal); color: #fff; border-color: var(--signal); }
+.btn.danger:disabled { opacity: .45; }
+.me-foot button[data-withdraw], .drv-wd { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; font: inherit; cursor: pointer; }
+.drv-wd { margin-top: 6px; color: var(--slate); }

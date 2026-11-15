@@ -41,6 +41,9 @@ const App = {
     Store.on(() => { this.render(); this.scheduleAlerts(); });
     this.render();
     this.scheduleAlerts();
+    // 앱을 다시 볼 때 · 한 시간마다 알림을 다시 예약 (켜 둔 채 날짜가 넘어가도 다음 날 알림이 걸리게)
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.scheduleAlerts(); });
+    setInterval(() => this.scheduleAlerts(), 3600e3);
     setInterval(() => { if (this.tab === 'home') this.render(); }, 60000);
     this._booted = true;
     // 알림 전용 서비스워커 (화면 파일 캐시는 하지 않음) — 알림을 누르면 앱을 여는 데만 씀
@@ -69,7 +72,9 @@ const App = {
   size() { return this.SIZES[localStorage.getItem('CEOP_FONT')] ? localStorage.getItem('CEOP_FONT') : 'm'; },
   applySize() { document.getElementById('root').style.zoom = this.SIZES[this.size()][1]; },
 
-  notifState() { return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission; },
+  /** 아이폰 · 안드로이드 앱 안: 알림은 폰이 직접 예약해요 (앱이 꺼져 있어도 울림). 웹은 브라우저 알림 */
+  native() { return (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ceoAlarms) ? 'ios' : window.CEOAndroid ? 'android' : ''; },
+  notifState() { return this.native() ? 'granted' : typeof Notification === 'undefined' ? 'unsupported' : Notification.permission; },
 
   render() {
     document.querySelectorAll('#tabs button').forEach(b => { b.classList.toggle('on', b.dataset.tab === this.tab); b.setAttribute('aria-current', b.dataset.tab === this.tab ? 'page' : 'false'); });
@@ -396,8 +401,8 @@ const App = {
           ${row('data-edit="name"', '이름', p.name || '')}
           ${sizes}</div></section>
         <section class="group"><h2>구독</h2><div class="box">
-          <a class="set-row" href="${U.esc(Plan.payUrl())}"><span class="l">${U.esc(Plan.NAMES[ps.plan])}<small>${U.esc(Plan.summary())}${Plan.payNote() ? '<br>' + U.esc(Plan.payNote()) : ''}</small></span><span class="v strong">${ps.plan === 'trial' || ps.plan === 'expired' ? '결제' : '연장'}${Icon.svg('chevron', 16)}</span></a></div></section>
-        <p class="me-foot">${Store.mode === 'demo' ? `<button data-reset>데모 데이터 처음으로</button>${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''}` : '<button data-logout>로그아웃</button>'} · <a href="privacy.html" target="_blank">개인정보 처리방침</a> · 버전 0.4</p>
+          ${Plan.isFree() ? `<div class="set-row"><span class="l">${U.esc(Plan.NAMES.free)}<small>${U.esc(Plan.summary())}</small></span></div>` : `<a class="set-row" href="${U.esc(Plan.payUrl())}"><span class="l">${U.esc(Plan.NAMES[ps.plan])}<small>${U.esc(Plan.summary())}${Plan.payNote() ? '<br>' + U.esc(Plan.payNote()) : ''}</small></span><span class="v strong">${ps.plan === 'trial' || ps.plan === 'expired' ? '결제' : '연장'}${Icon.svg('chevron', 16)}</span></a>`}</div></section>
+        <p class="me-foot">${Store.mode === 'demo' ? `<button data-reset>데모 데이터 처음으로</button>${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''}` : '<button data-logout>로그아웃</button>'} · <a href="privacy.html" target="_blank">개인정보 처리방침</a> · <button data-withdraw>회원 탈퇴</button> · 버전 1.0</p>
       </div>`;
   },
 
@@ -657,16 +662,39 @@ const App = {
     on('[data-size]', el => { localStorage.setItem('CEOP_FONT', el.dataset.size); this.applySize(); this.render(); });
     on('[data-reset]', () => { if (confirm('데모 데이터를 처음 상태로 되돌릴까요?')) Store.resetDemo(); });
     on('[data-logout]', () => Store.signOut());
+    on('[data-withdraw]', () => U.withdraw());
     const cf = root.querySelector('#chatForm');
     if (cf) cf.addEventListener('submit', safe(async e => { e.preventDefault(); const v = cf.body.value.trim(); if (v) await Store.send(v); }));
   },
 
   // ───────── 알림 (앱이 열려 있을 때만 — 앱이 꺼져도 울리는 알람은 안드로이드 단계에서) ─────────
+  /** 앱 안: 앞으로 이틀치 알림 목록을 폰에 통째로 넘겨요 (예전 예약은 폰이 지우고 다시 걸어요) */
+  scheduleNative(now = Date.now()) {
+    const list = [], until = now + 48 * 3600e3;
+    const add = (id, at, title, body, next) => { const t = at.getTime(); if (t > now && t < until) list.push({ id, fireAt: at.toISOString(), title, body, next: !!next }); };
+    [U.today(), U.addDays(U.today(), 1), U.addDays(U.today(), 2)].forEach(ymd => this.dayPlan(ymd).forEach(({ s, p }) => {
+      p.items.filter(it => ['wake', 'driver', 'leave'].includes(it.kind)).forEach(it => {
+        const nav = it.kind === 'leave' && !AutoNav.byDriver(s);
+        add(`ceo-${s.id}-${it.kind}`, it.at, it.title, `${s.title} · ${s.start}${nav ? '\n눌러서 바로 길안내' : ''}`, nav);
+        if (nav) add(`ceo-${s.id}-pre`, new Date(it.at.getTime() - 3600e3), `다음 일정 · ${U.hm(it.at)} 출발`, `${s.title}${AutoNav.dest(s) ? ' · ' + AutoNav.dest(s) : ''}\n차에 타면 눌러서 바로 길안내`, true);
+      });
+    }));
+    const b = this.latestBrief();
+    if (b && b.ymd === U.addDays(U.today(), 1) && b.pending.length) add('ceo-brief', U.at(U.today(), '21:00'), '내일 일정 확인', `확인 대기 ${b.pending.length}건 — 앱에서 '모두 확인'을 눌러 주세요`, false);
+    list.sort((a, c) => a.fireAt.localeCompare(c.fireAt));
+    const json = JSON.stringify(list.slice(0, 40));
+    try {
+      if (this.native() === 'ios') window.webkit.messageHandlers.ceoAlarms.postMessage(json);
+      else window.CEOAndroid.setAlarms(json);
+    } catch (e) { console.warn('알림 예약 실패', e); }
+  },
+
   scheduleAlerts() {
     this._timers.forEach(clearTimeout);
     this._timers = [];
     if (this.notifState() !== 'granted') return;
     const now = Date.now();
+    if (this.native()) return this.scheduleNative(now);
     [U.today(), U.addDays(U.today(), 1)].forEach(ymd => this.dayPlan(ymd).forEach(({ s, p }) => {
       p.items.filter(it => ['wake', 'driver', 'leave'].includes(it.kind)).forEach(it => {
         const ms = it.at.getTime() - now;

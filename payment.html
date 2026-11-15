@@ -97,6 +97,14 @@
     route() {
       if (this.q.get('fail')) return this.showResult(false, this.q.get('message') || '결제를 취소했거나 완료하지 못했어요. 돈은 나가지 않았어요.');
       if (this.q.get('paymentKey')) return this.confirm();
+      // 무료 기간: 결제를 받지 않아요
+      if (Plan.isFree()) {
+        const root = document.getElementById('root');
+        root.innerHTML = `<div class="pay-head"><h1>${U.esc(Plan.FREE_TEXT)}</h1></div>
+          <div class="card" style="padding:20px"><p style="margin:0 0 10px">지금은 <b>${U.esc(Plan.FREE_TEXT)}</b>로 AI 비서를 포함한 모든 기능을 쓸 수 있어요.</p>
+          <p class="muted small" style="margin:0">무료 기간이 끝나기 전에 요금과 결제 방법을 미리 알려 드려요. 그때까지 결제 정보는 받지 않아요.</p></div>`;
+        return;
+      }
       this.choose();
     },
 

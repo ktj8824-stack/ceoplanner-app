@@ -276,6 +276,14 @@ const Store = {
     return data;
   },
   async signUp(form) { return this._account({ action: 'signup', ...form }); },
+  /** 회원 탈퇴 — 비서 · 기사는 내 계정, 대표는 회사 전체를 지워요 (서버 ceo-account delete_self) */
+  async deleteMe() {
+    if (this.mode !== 'supabase') throw new Error('데모에서는 지울 계정이 없어요. 실제 계정에서는 여기서 바로 탈퇴할 수 있어요.');
+    const r = await this._account({ action: 'delete_self', confirm: '탈퇴' });
+    try { await this.client.auth.signOut(); } catch { /* 계정이 이미 없음 */ }
+    try { Object.keys(localStorage).filter(k => /^(ceo|CEOP)_/i.test(k)).forEach(k => localStorage.removeItem(k)); } catch { /* */ }
+    return r;
+  },
 
   /** action: 'add_member' | 'reset_password' | 'remove_member' */
   async account(action, payload) {

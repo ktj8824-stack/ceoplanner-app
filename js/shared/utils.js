@@ -34,6 +34,27 @@ const U = {
     if (!full || b === full) return b || '';
     return /주차|현관|로비|정문|입구|후문|게이트/.test(full) ? `${b} (${full.slice(b.length).trim()})` : b;
   },
+  /** 회원 탈퇴 창 (대표 앱 · 비서 웹 · 기사님 공용). 대표는 회사 전체가 지워진다고 분명히 알려요 */
+  withdraw() {
+    const ceo = Store.role === 'ceo';
+    const back = document.createElement('div'); back.className = 'modal-back withdraw-back';
+    back.innerHTML = `<div class="modal withdraw" role="dialog" aria-label="회원 탈퇴" style="max-width:420px;background:#fff;border-radius:16px;padding:22px;margin:auto">
+      <h3 style="margin:0 0 8px">회원 탈퇴</h3>
+      <p style="margin:0 0 10px">${ceo ? '<b>대표 계정을 지우면 회사 전체가 지워져요.</b> 비서 · 기사님 계정, 모든 일정과 비서톡이 함께 지워지고 되돌릴 수 없어요.' : '내 계정이 지워지고 다시 로그인할 수 없어요. 회사의 일정과 다른 분들의 계정은 그대로 남아요.'}</p>
+      <label style="display:block;margin:0 0 12px;font-size:14px">계속하려면 <b>탈퇴</b>라고 적어 주세요<input data-w style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid #CBD2DC;border-radius:10px;font-size:16px" autocomplete="off"></label>
+      <p data-err style="color:#B4442E;font-size:14px;margin:0 0 10px" hidden></p>
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn" data-x>취소</button><button type="button" class="btn danger" data-go disabled>탈퇴하기</button></div></div>`;
+    document.body.appendChild(back);
+    const inp = back.querySelector('[data-w]'), go = back.querySelector('[data-go]'), err = back.querySelector('[data-err]');
+    inp.addEventListener('input', () => { go.disabled = inp.value.trim() !== '탈퇴'; });
+    back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-x]')) back.remove(); });
+    go.addEventListener('click', async () => {
+      go.disabled = true; err.hidden = true;
+      try { await Store.deleteMe(); back.remove(); alert(ceo ? '회사와 모든 계정을 지웠어요. 그동안 이용해 주셔서 감사합니다.' : '계정을 지웠어요. 그동안 이용해 주셔서 감사합니다.'); location.reload(); }
+      catch (e) { err.textContent = e.message || '지우지 못했어요. 잠시 후 다시 해 주세요.'; err.hidden = false; go.disabled = false; }
+    });
+    setTimeout(() => inp.focus(), 50);
+  },
   addMin(date, min) { return new Date(date.getTime() + Math.round(min) * 60000); },
   diffMin(a, b) { return Math.round((a.getTime() - b.getTime()) / 60000); },
   WEEK: ['일', '월', '화', '수', '목', '금', '토'],

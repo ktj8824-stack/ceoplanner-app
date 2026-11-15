@@ -8,7 +8,13 @@ const Plan = {
   // 가격은 모두 부가세 별도(VAT 별도)예요. 결제 금액 = 가격 + 부가세 10% (B2B 관행, 세금계산서 기준)
   VAT_RATE: 0.1,
   PRICES: { basic: 59000, premium: 100000, perExec: 50000, maxExec: 20, trialDays: 14 },
-  NAMES: { trial: '무료 체험', basic: '기본', premium: 'AI 비서 포함', expired: '이용 기간 끝남' },
+  NAMES: { free: '무료 기간', trial: '무료 체험', basic: '기본', premium: 'AI 비서 포함', expired: '이용 기간 끝남' },
+  // 출시 무료 기간: 이 날까지 결제를 닫고 모든 기능(AI 비서 포함)을 무료로 (버디 · 마이 · 로드 플래너와 같은 날)
+  // 결제를 열 때: PAY_OPEN 을 true 로 (서버 billing.js 의 FREE_UNTIL 도 같이)
+  PAY_OPEN: false,
+  FREE_UNTIL: '2027-03-31T23:59:59+09:00',
+  FREE_TEXT: '2027년 3월 31일까지 무료',
+  isFree(now = new Date()) { return !this.PAY_OPEN && now < new Date(this.FREE_UNTIL); },
   FEATURES: {
     basic: ['비서 웹 · 대표 앱 · 기사 계정', '역산 알림 (기상 · 기사 호출 · 출발)', '일정 겹침 · 동선 확인, 비서톡'],
     premium: ['기본의 모든 기능', 'AI 비서 — 말로 일정 등록 · 변경 · 미루기', '아침 브리핑 자동 정리'],
@@ -17,6 +23,10 @@ const Plan = {
   /** 지금 상태 { plan, active, ai, until, daysLeft } — 서버 planState 와 같은 규칙 */
   state(now = new Date()) {
     const c = Store.company() || {};
+    if (this.isFree(now)) {
+      const daysLeft = Math.ceil((new Date(this.FREE_UNTIL) - now) / 86400000);
+      return { plan: 'free', active: true, ai: true, until: this.FREE_UNTIL, daysLeft, extraExecs: c.extraExecs || 0 };
+    }
     const paid = c.paidUntil && new Date(c.paidUntil) > now;
     const trial = !paid && c.trialUntil && new Date(c.trialUntil) > now;
     const plan = paid ? c.plan : trial ? 'trial' : 'expired';
@@ -67,6 +77,7 @@ const Plan = {
   /** 한 줄 요약 — 예: 'AI 비서 포함 · 12.10까지' / '무료 체험 · 3일 남음' */
   summary() {
     const s = this.state();
+    if (s.plan === 'free') return this.FREE_TEXT + ' (AI 비서 포함)';
     if (s.plan === 'expired') return '이용 기간이 끝났어요';
     if (s.plan === 'trial') return `무료 체험 · ${s.daysLeft}일 남음`;
     return `${this.NAMES[s.plan]} · ${this.untilText(s.until)}까지`;

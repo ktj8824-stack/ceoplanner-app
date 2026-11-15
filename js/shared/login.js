@@ -24,7 +24,7 @@ const Login = {
           </button>
           <button type="button" class="auth-card" data-signup>
             <span class="ico brass">${Icon.svg('file', 24)}</span>
-            <span class="t"><b>처음이에요 · 회사 등록</b><small>사업자번호로 가입 · ${Plan.PRICES.trialDays}일 무료 체험</small></span>${chev}
+            <span class="t"><b>처음이에요 · 회사 등록</b><small>사업자번호로 가입 · ${Plan.isFree() ? Plan.FREE_TEXT : Plan.PRICES.trialDays + '일 무료 체험'}</small></span>${chev}
           </button>
           <button type="button" class="auth-demo" data-demo>${Icon.svg('bolt', 16)} 데모 ${Store.role === 'secretary' ? '비서' : Store.role === 'driver' ? '기사' : '대표'} 계정으로 둘러보기</button>
         </div>
