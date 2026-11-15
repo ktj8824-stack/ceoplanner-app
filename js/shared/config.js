@@ -14,8 +14,8 @@
   const DEV_SECRETARY = WEB;
   const DEV_DRIVER = './driver.html';         // 기사님 배차표 (대표 앱 저장소에 들어 있음)   // 개발 PC의 비서 웹 파일 (분리본에서는 tools/package_split.cjs 가 맞게 바꿔 씀)
   window.CEOP_CONFIG = Object.freeze({
-    SUPABASE_URL: '',
-    SUPABASE_KEY: '', // sb_publishable_... 키만
+    SUPABASE_URL: 'https://iaccdqcthhtvvetmbryr.supabase.co',   // 서울 서버 (버디 · 마이플래너와 같이 씀 · 이름은 ceo_ 로 구분)
+    SUPABASE_KEY: 'sb_publishable_2aCvpHt1ANEtjLvu2aOQGA_fk6afbvA', // 공개용 키 (sb_publishable_ 만)
     // 토스페이먼츠 결제위젯 클라이언트 키 — 지금은 토스 문서용 공개 테스트 키 (실제 돈 안 나감). 가맹 후 live_gck_... 로 교체
     TOSS_CLIENT_KEY: 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm',
     PAY_URL: APP + 'payment.html',   // 아이폰 앱에서는 사파리로 이 결제 화면을 열어요
