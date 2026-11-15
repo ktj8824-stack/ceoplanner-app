@@ -45,3 +45,4 @@ body.driver { background: var(--porcelain, #F4F5F7); }
 .drv-foot { text-align: center; font-size: 13px; color: var(--slate); padding: 4px 16px 28px; }
 .dc-pill.late { background: var(--signal, #C2410C); color: #fff; }
 .dc-full { display: block; margin-top: 2px; font-size: 13px; color: var(--slate); font-weight: 500; }
+.drv-logout { display: block; width: calc(100% - 32px); margin: 8px 16px 24px; min-height: 52px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }

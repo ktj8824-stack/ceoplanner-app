@@ -59,8 +59,10 @@ const Drv = {
         ${p.secretaryPhone ? `<a class="drv-call" href="${U.telLink(p.secretaryPhone)}">${Icon.svg('phone', 18)} ${U.esc(p.secretaryName || '비서')}</a>` : ''}</header>
       <nav class="drv-tabs">${tab(t, '오늘')}${tab(t1, '내일')}</nav>
       <main class="drv-list">${jobs.length ? jobs.map(({ s, p: pl }) => this.card(s, pl, now)).join('') : '<div class="drv-empty"><p>이 날은 배차가 없어요.</p></div>'}</main>
-      <p class="drv-foot">${Store.mode === 'demo' ? '데모 화면이에요 · ' : ''}누른 상태는 대표님과 비서실에 바로 전달돼요<br><button type="button" class="drv-wd" data-withdraw>회원 탈퇴</button></p>`;
+      <p class="drv-foot">${Store.mode === 'demo' ? '데모 화면이에요 · ' : ''}누른 상태는 대표님과 비서실에 바로 전달돼요<br><button type="button" class="drv-wd" data-withdraw>회원 탈퇴</button></p>
+      ${Store.mode === 'demo' ? '' : '<button type="button" class="drv-logout" data-logout>로그아웃</button>'}`;
     root.querySelector('[data-withdraw]')?.addEventListener('click', () => U.withdraw());
+    root.querySelector('[data-logout]')?.addEventListener('click', () => Store.signOut());
     root.querySelectorAll('[data-day]').forEach(b => b.addEventListener('click', () => { this.day = b.dataset.day; this.render(); }));
     root.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => this.step(b.dataset.id, b.dataset.step)));
   },

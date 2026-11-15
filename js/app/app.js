@@ -402,7 +402,8 @@ const App = {
           ${sizes}</div></section>
         <section class="group"><h2>구독</h2><div class="box">
           ${Plan.isFree() ? `<div class="set-row"><span class="l">${U.esc(Plan.NAMES.free)}<small>${U.esc(Plan.summary())}</small></span></div>` : `<a class="set-row" href="${U.esc(Plan.payUrl())}"><span class="l">${U.esc(Plan.NAMES[ps.plan])}<small>${U.esc(Plan.summary())}${Plan.payNote() ? '<br>' + U.esc(Plan.payNote()) : ''}</small></span><span class="v strong">${ps.plan === 'trial' || ps.plan === 'expired' ? '결제' : '연장'}${Icon.svg('chevron', 16)}</span></a>`}</div></section>
-        <p class="me-foot">${Store.mode === 'demo' ? `<button data-reset>데모 데이터 처음으로</button>${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''}` : '<button data-logout>로그아웃</button>'} · <a href="privacy.html" target="_blank">개인정보 처리방침</a> · <button data-withdraw>회원 탈퇴</button> · 버전 1.0</p>
+        ${Store.mode === 'demo' ? '' : `<section class="group"><div class="box"><button type="button" class="set-row logout-row" data-logout>로그아웃</button></div></section>`}
+        <p class="me-foot">${Store.mode === 'demo' ? `<button data-reset>데모 데이터 처음으로</button>${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''} · ` : ''}<a href="privacy.html" target="_blank">개인정보 처리방침</a> · <button data-withdraw>회원 탈퇴</button> · 버전 1.0</p>
       </div>`;
   },
 
