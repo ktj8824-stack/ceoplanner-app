@@ -93,17 +93,18 @@
       const ok = x => x.length >= this.MIN_SAMPLES;
       const o = this.key(origin);
       const sl = at ? this.slot(at) : null;
-      // 고르는 순서: 같은 시간대 + 같은 출발지 → 같은 시간대 → 같은 출발지 → 전체
-      const tries = [
-        sl && all.filter(x => x.slot === sl.key && o && x.origin === o),
-        sl && all.filter(x => x.slot === sl.key),
-        o && all.filter(x => x.origin === o),
-        all,
-      ].filter(Boolean);
+      // 시각을 알면 같은 시간대 기록만 써요 (낮 출발에 퇴근길 기록이 섞이면 '19분 늦음' 같은 틀린 경고가 나가요).
+      // 같은 시간대 기록이 모자라면 null → 일정에 적힌 이동 시간을 씀
+      // '비슷한 시간' = 같은 시간대이거나 출발 시각이 앞뒤 1시간 반 안 (10:12 출발이면 09:05 기록도 써요)
+      const tod = d => { const x = new Date(d); return x.getHours() * 60 + x.getMinutes(); };
+      const near = x => sl && (x.slot === sl.key || Math.abs(tod(x.at) - tod(at)) <= 90);
+      const tries = sl
+        ? [all.filter(x => near(x) && o && x.origin === o), all.filter(near)]
+        : [o && all.filter(x => x.origin === o), all].filter(Boolean);
       const use = (tries.find(ok) || []).slice(0, 5);
       if (!ok(use)) return null;
       const mins = use.map(x => x.min);
-      const bySlot = !!sl && use.every(x => x.slot === sl.key);
+      const bySlot = !!sl;
       return { n: use.length, avg: Math.round(mins.reduce((a, b) => a + b, 0) / mins.length), mins,
         sameOrigin: !!o && use.every(x => x.origin === o), slotLabel: bySlot ? sl.label : '' };
     },

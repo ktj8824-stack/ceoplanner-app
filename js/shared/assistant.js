@@ -74,7 +74,8 @@
 
     /** 그날 이 시각 전에 끝나는 마지막 일정 장소 (없으면 본사) — 기사님 대기 장소 */
     originBefore(list, date, start) {
-      const prev = list.filter(x => x.date === date && x.location && !x.masked && x.status !== 'cancelled' && (x.end || x.start) <= start && x.start <= start)
+      // 대표 개인 일정 장소는 출발지로 쓰지 않아요 (비서 · 기사님께 보이게 돼요)
+      const prev = list.filter(x => x.date === date && x.location && !x.masked && !this.isPrivate(x) && x.status !== 'cancelled' && (x.end || x.start) <= start && x.start <= start)
         .sort((a, b) => (a.end || a.start).localeCompare(b.end || b.start)).pop();
       return prev ? prev.location : '';
     },
@@ -194,6 +195,9 @@
     ro(hm) { const m = hm.slice(-2); return `${hm}${m === '00' || m.endsWith('5') ? '로' : '으로'}`; },
 
     label(s) { return `${s.title} (${this.when(s)})`; },
+    /** '11/14(토)' */
+    dayLabel(ymd) { const d = U.at(ymd, '00:00'); return `${d.getMonth() + 1}/${d.getDate()}(${WEEK[d.getDay()]})`; },
+
     when(s) {
       const d = U.at(s.date, '00:00');
       return `${d.getMonth() + 1}/${d.getDate()} ${s.start}`;
@@ -226,38 +230,47 @@
       if (s.masked) return { kind: 'answer', say: '그 일정은 바꿀 수 없어요.' };
       if (/장소|식당|가게|곳/.test(t) && !this.minutes(t) && !this.time(t)) return this.place(t, s);
       const dur = U.diffMin(U.at(s.date, s.end || s.start), U.at(s.date, s.start));
-      let start = null;
+      const from = U.at(s.date, s.start);
+      let at = null;   // 새 시작 (날짜 포함 — 자정을 넘기면 다음 날 · 앞당겨 자정 전이면 전날)
       const abs = /(로|으로)\s*(미뤄|옮겨|바꿔|변경)|에\s*(해|하자)/.test(t) ? this.time(t) : null;
-      if (abs) start = abs;
-      else {
+      if (abs) {
+        at = U.at(s.date, abs);
+        // '밤 12시로' · '미뤄'인데 더 이른 시각이 되면 다음 날로 (같은 날 새벽 = 이미 지난 시각이 되지 않게)
+        if (/밤\s*12\s*시|자정/.test(t) || (/미뤄|늦춰|늦추/.test(t) && at < from)) at = U.addMin(at, 24 * 60);
+      } else {
         const n = this.minutes(t);
         const sign = /당겨|앞당/.test(t) ? -1 : 1;
         if (!n) return { kind: 'answer', say: `${this.eul(s.title)} 몇 분 ${sign < 0 ? '당길지' : '미룰지'}, 또는 몇 시로 옮길지 같이 말씀해 주세요.` };
-        start = U.hm(U.addMin(U.at(s.date, s.start), sign * n));
+        at = U.addMin(from, sign * n);
       }
-      const end = U.hm(U.addMin(U.at(s.date, start), dur));
-      const next = { ...s, start, end };
+      const start = U.hm(at), date = U.ymd(at);
+      const end = U.hm(U.addMin(at, dur));
+      const next = { ...s, date, start, end };
       const all = [...list.filter(x => x.id !== s.id), next];
-      const warns = [...Backtime.conflictsOn(all, s.date), ...Backtime.conflictsOn(all, U.addDays(s.date, 1))].filter(w => w.a === next || w.b === next);
+      const warns = [...Backtime.conflictsOn(all, date), ...Backtime.conflictsOn(all, U.addDays(date, 1))].filter(w => w.a === next || w.b === next);
       const priv = this.isPrivate(s);
+      const moved = date !== s.date;
+      const toLabel = moved ? `${this.dayLabel(date)} ${start}` : start;
       return {
         kind: 'action',
-        say: `${this.eul(s.title)} ${this.ro(start)} 옮길까요?`,
-        lines: [`${s.title}`, `${s.start}–${s.end} → ${start}–${end}`, ...warns.map(w => `주의: ${w.msg}`), priv ? '개인 일정이라 비서에게는 알리지 않아요' : '바꾸면 비서에게 자동으로 알려요'],
+        say: `${this.eul(s.title)} ${moved ? `${this.dayLabel(date)} ` : ''}${this.ro(start)} 옮길까요?`,
+        lines: [`${s.title}`, `${moved ? `${this.dayLabel(s.date)} ` : ''}${s.start}–${s.end} → ${toLabel}–${end}`, ...(moved ? [`날짜가 ${this.dayLabel(date)}로 바뀌어요`] : []), ...warns.map(w => `주의: ${w.msg}`), priv ? '개인 일정이라 비서에게는 알리지 않아요' : '바꾸면 비서에게 자동으로 알려요'],
         changes: [{ op: 'upsert', schedule: next }],
-        notify: priv ? null : { body: `대표님이 '${s.title}' 시간을 ${s.start} → ${this.ro(start)} 바꿨어요. 상대방께 전달 부탁해요.`, ref: s.id },
+        notify: priv ? null : { body: `대표님이 '${s.title}' 시간을 ${s.start} → ${moved ? `${this.dayLabel(date)} ` : ''}${this.ro(start)} 바꿨어요. 상대방께 전달 부탁해요.`, ref: s.id },
       };
     },
 
     // ───────── 장소: "투자사 점심 장소 바꿔 줘" · "점심 장소 소담으로 바꿔 줘" ─────────
     place(t, s) {
-      const m = t.match(/(?:장소|식당|곳)\s*(?:을|를)?\s*(.+?)\s*(?:으로|로)\s*(?:바꿔|옮겨|변경)/);
-      const to = m ? m[1].trim() : '';
+      const m = t.match(/(?:장소|식당)\s*(?:을|를)?\s*(.+?)\s*(?:으로|로)\s*(?:바꿔|옮겨|변경)/);
+      let to = m ? m[1].trim() : '';
+      // '다른 곳으로 · 다른 데로' 는 새 장소 이름이 아니에요 → 비서에게 정해 달라고 부탁
+      if (to.length < 2 || /^(다른|딴|좋은|괜찮은)\s*(곳|데|장소|식당|집)?$/.test(to)) to = '';
       const priv = this.isPrivate(s);
       if (to) {
         const next = { ...s, location: to };
         return {
-          kind: 'action', say: `${this.eul(s.title)} 장소를 '${to}'${this.batchim(to) ? '으로' : '로'} 바꿀까요?`,
+          kind: 'action', say: `'${s.title}' 장소를 '${to}'${this.batchim(to) ? '으로' : '로'} 바꿀까요?`,
           lines: [s.title, `${s.location || '장소 없음'} → ${to}`, priv ? '개인 일정이라 비서에게는 알리지 않아요' : '바꾸면 비서에게 이동 시간 확인을 부탁해요'],
           changes: [{ op: 'upsert', schedule: next }],
           notify: priv ? null : { body: `대표님이 '${s.title}' 장소를 '${to}'(으)로 바꿨어요. 이동 시간 · 상대방 연락 확인 부탁해요.`, ref: s.id },
@@ -317,7 +330,7 @@
       const start = this.time(t);
       // '내일 밤 12시' = 모레 00:00 (자정은 다음 날)
       if (date && /밤\s*12\s*시/.test(t)) date = U.addDays(date, 1);
-      if (!date || !start) return { kind: 'answer', say: `${!date ? '날짜' : '시간'}를 같이 말씀해 주세요. 예: "목요일 오후 3시에 한빛전자 미팅 잡아 줘"` };
+      if (!date || !start) return { kind: 'answer', say: `${!date ? '날짜를' : '시간을'} 같이 말씀해 주세요. 예: "목요일 오후 3시에 한빛전자 미팅 잡아 줘"` };
       const locM = t.match(/([^\s,]+(?:\s[^\s,]+)?)\s*에서/);
       let location = locM ? locM[1] : '';
       // '최상무님이랑' · '정민호 부사장님과' → 만날 분 (제목에서는 빼기)

@@ -369,7 +369,8 @@ const Store = {
     // schedule_feed 뷰: 비서에게는 개인 일정을 서버에서 '바쁨'으로 가려서 내려줌
     const [sch, msg, prof, mem, co, ntc, pay] = await Promise.all([
       this.client.from('ceo_schedule_feed').select('*').eq('ceo_id', this.ceoId),
-      this.client.from('ceo_messages').select('*').eq('ceo_id', this.ceoId).order('created_at', { ascending: true }).limit(300),
+      // 최신 300개 (오래된 300개가 아니라) — 아래에서 다시 시간 순으로 뒤집어요
+      this.client.from('ceo_messages').select('*').eq('ceo_id', this.ceoId).order('created_at', { ascending: false }).limit(300),
       this.client.from('ceo_profiles').select('name, settings').eq('id', this.ceoId).single(),
       this.companyId ? this.client.from('ceo_profiles').select('login_id, name, role, phone').eq('company_id', this.companyId) : Promise.resolve({ data: [] }),
       this.companyId ? this.client.from('ceo_companies').select('plan, trial_until, paid_until, extra_execs, next_plan, next_extra_execs').eq('id', this.companyId).maybeSingle() : Promise.resolve({ data: null }),
@@ -385,7 +386,7 @@ const Store = {
       payments: ((pay && pay.data) || []).map(r => ({ orderId: r.order_id, kind: r.kind || 'month', plan: r.plan, extraExecs: r.extra_execs, amount: r.amount, vat: r.vat_amount, status: r.status, method: r.method, approvedAt: r.approved_at, periodEnd: r.period_end, mode: r.mode })),
       notices: ((ntc && ntc.data) || []).map(r => ({ id: r.id, title: r.title, body: r.body || '', pinned: !!r.pinned, at: r.created_at })),
       members: (mem.data || []).map(r => ({ loginId: r.login_id, name: r.name, role: r.role, phone: r.phone || '' })),
-      messages: (msg.data || []).map(r => ({ id: r.id, from: r.sender_role, body: r.body, urgent: r.urgent, ref: r.ref_id, at: r.created_at })),
+      messages: (msg.data || []).slice().reverse().map(r => ({ id: r.id, from: r.sender_role, body: r.body, urgent: r.urgent, ref: r.ref_id, at: r.created_at })),
     };
   },
 

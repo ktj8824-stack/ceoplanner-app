@@ -19,7 +19,7 @@ const U = {
   /** 기사님이 기다릴 곳: '본사 15층 대회의실' → '본사' (층 · 호실 · 회의실은 빼고 건물 이름만) */
   building(place) {
     const p = String(place || '').trim();
-    const b = p.replace(/\s*(지하\s*)?\d+\s*층.*$|\s*\d+\s*호.*$|\s*(대|소|중)?회의실.*$|\s*(접견실|사무실|대표실|임원실|라운지).*$/, '').trim();
+    const b = p.replace(/\s*(B|b|지하\s*)?\d+\s*층.*$|\s*\d+\s*호.*$|\s*(대|소|중)?회의실.*$|\s*(접견실|사무실|대표실|임원실|라운지).*$/, '').trim();
     return b || p;
   },
   /** 연결 실패 화면 (대표 앱 · 비서 웹 · 기사님 · 결제 공용) — '다시 시도' 버튼 */
@@ -27,6 +27,12 @@ const U = {
     const msg = (err && err.message) || String(err || '');
     return `<div style="padding:48px 24px;text-align:center;max-width:420px;margin:0 auto"><p style="font-size:17px;font-weight:700;margin:0 0 8px">연결하지 못했어요</p>`
       + `<p style="color:#556274;margin:0 0 20px">${U.esc(msg)}</p><button type="button" class="btn primary" onclick="location.reload()">다시 시도</button></div>`;
+  },
+  /** 문자용 대기 장소: 건물 이름 + 주차장·현관처럼 기사님께 필요한 위치면 괄호로 ('S타워 (B2층 주차장)') */
+  pickupLabel(place) {
+    const full = String(place || '').trim(), b = U.building(full);
+    if (!full || b === full) return b || '';
+    return /주차|현관|로비|정문|입구|후문|게이트/.test(full) ? `${b} (${full.slice(b.length).trim()})` : b;
   },
   addMin(date, min) { return new Date(date.getTime() + Math.round(min) * 60000); },
   diffMin(a, b) { return Math.round((a.getTime() - b.getTime()) / 60000); },

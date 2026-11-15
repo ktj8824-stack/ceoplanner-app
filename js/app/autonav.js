@@ -39,16 +39,21 @@ const AutoNav = {
     if (this._consumeFlag() || window.__ceopGoNext) { window.__ceopGoNext = false; setTimeout(() => this.start(), 300); }
   },
 
+  /** 길안내 목적지: KTX · 비행기는 최종 목적지가 아니라 역 · 공항 */
+  dest(s) { return (Backtime.isTrip(s.mode) && s.trip && s.trip.station) || s.location; },
+  /** 기사님이 운전하는 이동(기사 차량 · 역까지 기사 차량)은 대표님께 길안내가 필요 없어요 */
+  byDriver(s) { return s.mode === 'driver' || !!(Backtime.isTrip(s.mode) && s.trip && s.trip.accessMode === 'driver'); },
+
   /* ── 출발 1시간 전부터 '다음 일정' 알림을 알림 목록에 남겨 두기 ──
      미리 눌러서 사라졌으면 앱을 떠날 때 다시 올려 두고(소리 없이), 길안내를 시작하면 지움. 기사 운전 일정은 제외 */
   _noticeInfo(now = new Date()) {
     const r = this.nextLeg(now);
     const l = r && (r.leg || r.later);
-    if (!l || !l.s || l.s.mode === 'driver') return null;
+    if (!l || !l.s || this.byDriver(l.s)) return null;
     const left = (l.dep - now.getTime()) / 60000;
     if (left > 65 || left < -20) return null;
     try { if (localStorage.getItem('ceop_autonav_gone') === l.s.id) return null; } catch (e) { /* */ }
-    return { id: l.s.id, title: `🚗 다음 일정 · ${U.hm(new Date(l.dep))} 출발`, body: `${l.s.title}${l.s.location ? ' · ' + l.s.location : ''}\n차에 타면 눌러서 바로 길안내` };
+    return { id: l.s.id, title: `🚗 다음 일정 · ${U.hm(new Date(l.dep))} 출발`, body: `${l.s.title}${this.dest(l.s) ? ' · ' + this.dest(l.s) : ''}\n차에 타면 눌러서 바로 길안내` };
   },
   async keepNotice() {
     try {
@@ -82,7 +87,7 @@ const AutoNav = {
     const cands = [];
     for (const ymd of [U.today(), U.addDays(U.today(), 1)]) {
       for (const { s, p } of App.dayPlan(ymd)) {
-        if (!s.location || !s.mode || s.mode === 'none' || !p.leaveAt) continue;
+        if (!this.dest(s) || !s.mode || s.mode === 'none' || !p.leaveAt) continue;
         if (ymd === U.today()) todayCount++;
         const dep = p.leaveAt.getTime(), until = p.startAt.getTime() + this.LATE_MIN * 60000;
         if (t >= until) continue;
@@ -119,7 +124,7 @@ const AutoNav = {
     this._overlay(`
       <div class="an-k">${U.esc(leg.s.title || '일정')} · ${U.esc(leg.s.start)} 시작</div>
       <div class="an-t">${U.hm(leg.p.leaveAt)} 출발</div>
-      <div class="an-d">📍 ${U.esc(leg.s.location)}</div>
+      <div class="an-d">📍 ${U.esc(this.dest(leg.s))}</div>
       <div class="an-c">어느 내비로 안내할까요?</div>
       <div class="an-b">
         <button type="button" class="an-go an-tmap" onclick="AutoNav.go('tmap')">티맵</button>
@@ -135,8 +140,9 @@ const AutoNav = {
     if (!l) return;
     try { localStorage.setItem('ceop_autonav_gone', l.s.id); } catch (e) { /* */ }   // 길안내 시작 = 출발 → 남겨 둔 알림 지움
     this.clearNotice();
-    const q = encodeURIComponent(l.s.location);
-    const url = app === 'kakaomap' ? `kakaomap://search?q=${q}` : U.tmapLink(l.s.location);
+    const to = this.dest(l.s);
+    const q = encodeURIComponent(to);
+    const url = app === 'kakaomap' ? `kakaomap://search?q=${q}` : U.tmapLink(to);
     const web = `https://map.kakao.com/link/search/${q}`;
     const mobile = this.isApp() || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
     if (!mobile) { window.open(web, '_blank'); return; }
@@ -151,7 +157,7 @@ const AutoNav = {
   _laterMsg(l) {
     this._leg = l;
     this._overlay(`<div class="an-t">다음 일정은 ${U.hm(l.p.leaveAt)} 출발이에요</div>
-      <div class="an-d">${U.esc(l.s.title || '')} · 📍 ${U.esc(l.s.location)}</div>
+      <div class="an-d">${U.esc(l.s.title || '')} · 📍 ${U.esc(this.dest(l.s))}</div>
       <div class="an-b"><button type="button" class="an-x" onclick="AutoNav.cancel()">닫기</button>
       <button type="button" class="an-go" onclick="AutoNav._ready(AutoNav._leg)">지금 길안내</button></div>`, true);
   },

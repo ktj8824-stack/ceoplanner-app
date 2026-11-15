@@ -33,6 +33,7 @@
     },
 
     DEFAULT_PREP_MIN: 60,   // 기상 → 출발 준비 시간 (내 정보에서 바꿈)
+    DEFAULT_COMMUTE_MIN: 40,   // 집 → 회사 출근 이동 (사내 회의로 시작하는 날 기상 계산)
     DEFAULT_BUFFER_MIN: 10, // 길 막힘 대비 기본 여유
 
     isTrip(mode) { return !!(this.MODES[mode] && this.MODES[mode].trip); },
@@ -90,9 +91,15 @@
       }
 
       let wakeAt = null;
+      const prep = Number(opts.prepMin ?? this.DEFAULT_PREP_MIN);
       if (opts.firstOfDay && mode !== 'none') {
-        wakeAt = U.addMin(leaveAt, -Number(opts.prepMin ?? this.DEFAULT_PREP_MIN));
-        items.unshift({ at: wakeAt, kind: 'wake', icon: '⏰', title: '기상', detail: `준비 ${U.durLabel(opts.prepMin ?? this.DEFAULT_PREP_MIN)}` });
+        wakeAt = U.addMin(leaveAt, -prep);
+        items.unshift({ at: wakeAt, kind: 'wake', icon: '⏰', title: '기상', detail: `준비 ${U.durLabel(prep)}` });
+      } else if (opts.firstOfDay && s.category !== 'personal') {
+        // 사내 일정으로 시작하는 날: 집 → 회사 출근 이동(프로필, 없으면 40분)과 준비 시간을 빼서 기상
+        const commute = Number(opts.commuteMin || this.DEFAULT_COMMUTE_MIN);
+        wakeAt = U.addMin(startAt, -(commute + prep));
+        items.unshift({ at: wakeAt, kind: 'wake', icon: '⏰', title: '기상', detail: `준비 ${U.durLabel(prep)} · 출근 ${U.durLabel(commute)}` });
       }
 
       if (mode !== 'none') {
@@ -105,15 +112,15 @@
       return { arriveBy, leaveAt, driverCallAt, wakeAt, startAt, endAt, items, warn };
     },
 
-    /** 하루 일정 전체 역산 — 기상은 그날 첫 일정이 이동 일정일 때만.
-        앞에 사내 회의가 있으면 대표님은 이미 회사에 있으니 뒤 일정에 기상을 붙이지 않아요.
+    /** 하루 일정 전체 역산 — 기상은 그날 첫 일정에만 붙여요.
+        첫 일정이 사내 회의면 '출근 이동 + 준비'로 기상을 그 회의에 붙이고, 뒤 이동 일정에는 붙이지 않아요.
         (대표 개인 일정 · 취소된 일정은 '앞 일정'으로 치지 않음) */
     planDay(list, opts = {}) {
       const sorted = [...list].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
       let first = true;
       return sorted.map(s => {
         const moving = s.mode && s.mode !== 'none';
-        const p = this.plan(s, { ...opts, firstOfDay: first && moving });
+        const p = this.plan(s, { ...opts, firstOfDay: first && (moving || (s.category !== 'personal' && !s.masked && s.status !== 'cancelled')) });
         if (moving || (s.category !== 'personal' && !s.masked && s.status !== 'cancelled')) first = false;
         return { s, p };
       });

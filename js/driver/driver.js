@@ -31,11 +31,13 @@ const Drv = {
 
   /** 대기 장소: 출발지 칸이 비면 그날 바로 앞 일정 장소 (없으면 본사).
       '본사 15층 대회의실'처럼 층 · 회의실까지 적혀 있어도 기사님께는 건물 이름만 ('본사') */
-  waitPlace(s) {
-    if (s.origin) return U.building(s.origin);
-    const prev = Store.list().filter(x => x.date === s.date && x.id !== s.id && x.location && !x.masked && x.status !== 'cancelled' && (x.end || x.start) <= s.start)
+  waitPlace(s) { return U.building(this.waitFull(s)); },
+  /** 원래 적힌 대기 장소 전체 ('S타워 B2층 주차장') — 화면에 작게 같이 보여 줘요 (층·주차장은 기사님께 필요한 정보) */
+  waitFull(s) {
+    if (s.origin) return s.origin;
+    const prev = Store.list().filter(x => x.date === s.date && x.id !== s.id && x.location && !x.masked && x.visibility !== 'private' && x.status !== 'cancelled' && (x.end || x.start) <= s.start)
       .sort((a, b) => (a.end || a.start).localeCompare(b.end || b.start)).pop();
-    return prev ? U.building(prev.location) : '본사';
+    return prev ? prev.location : '본사';
   },
 
   jobs(ymd) {
@@ -77,7 +79,7 @@ const Drv = {
       <div class="dc-top"><div class="dc-call"><small>대기 시각</small><b class="num">${U.hm(callAt)}</b></div>
         <span class="dc-pill ${late ? 'late' : soon <= 30 && soon > -30 && !st.depart ? 'soon' : ''}">${past ? '끝남' : late ? `대기 ${U.durLabel(-soon)} 지남` : soon > 0 ? (soon < 60 ? `${soon}분 뒤` : `${U.durLabel(soon)} 뒤`) : st.depart ? '운행 중' : '대기 시간'}</span></div>
       <dl class="dc-route">
-        <dt>대기 장소</dt><dd>${U.esc(this.waitPlace(s))}</dd>
+        <dt>대기 장소</dt><dd>${U.esc(this.waitPlace(s))}${this.waitFull(s) !== this.waitPlace(s) ? `<small class="dc-full">${U.esc(this.waitFull(s))}</small>` : ''}</dd>
         <dt>출발</dt><dd class="num">${U.hm(pl.leaveAt)}</dd>
         <dt>${trip ? '역 · 공항' : '도착 목표'}</dt><dd><b>${U.esc(dest)}</b> <span class="num">${trip ? (s.trip && s.trip.departTime ? `${s.trip.departTime} 출발편` : '') : U.hm(pl.arriveBy)}</span></dd>
         <dt>일정</dt><dd>${s.start} ${U.esc(s.title)}</dd>
@@ -92,7 +94,7 @@ const Drv = {
     const s = Store.get(id); if (!s) return;
     const name = Store.profile().driverName || '기사';
     const body = {
-      wait: `${name}님: 출발지(${this.waitPlace(s)}) 도착, 대기 중이에요 · '${s.title}'`,
+      wait: `${name}님: 출발지(${U.pickupLabel(this.waitFull(s))}) 도착, 대기 중이에요 · '${s.title}'`,
       depart: `${name}님: 대표님 탑승, 출발했어요 · '${s.title}' ${s.trip ? (s.trip.station || '역') : (s.location || '현장')}으로`,
       arrive: `${name}님: 현장 도착했어요 · '${s.title}'`,
     }[kind];

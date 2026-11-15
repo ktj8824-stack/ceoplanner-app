@@ -44,3 +44,4 @@ body.driver { background: var(--porcelain, #F4F5F7); }
 .drv-empty { padding: 40px 16px; text-align: center; color: var(--slate); }
 .drv-foot { text-align: center; font-size: 13px; color: var(--slate); padding: 4px 16px 28px; }
 .dc-pill.late { background: var(--signal, #C2410C); color: #fff; }
+.dc-full { display: block; margin-top: 2px; font-size: 13px; color: var(--slate); font-weight: 500; }

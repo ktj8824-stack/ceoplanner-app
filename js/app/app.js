@@ -16,6 +16,7 @@ const App = {
   TABS: [['home', 'home', '홈'], ['chat', 'chat', '비서톡'], ['ai', 'mic', 'AI 비서'], ['sos', 'siren', '긴급'], ['me', 'user', '내 정보']],
   SIZES: { m: ['보통', 1], l: ['크게', 1.1], xl: ['아주', 1.22] },
   PREP: [30, 45, 60, 75, 90, 120],
+  COMMUTE: [15, 20, 30, 40, 50, 60, 75, 90],
 
   async start() {
     const root = document.getElementById('root');
@@ -84,7 +85,7 @@ const App = {
   },
 
   profile() { return Store.profile(); },
-  dayPlan(ymd) { return Backtime.planDay(Store.byDate(ymd).filter(s => s.status !== 'cancelled'), { prepMin: this.profile().prepMin }); },
+  dayPlan(ymd) { return Backtime.planDay(Store.byDate(ymd).filter(s => s.status !== 'cancelled'), { prepMin: this.profile().prepMin, commuteMin: this.profile().commuteMin }); },
 
   /** 지금 이후 가장 가까운 일정 (오늘·내일) */
   next() {
@@ -211,7 +212,7 @@ const App = {
     const acts = [];
     if (s.mode === 'driver' && p.driverPhone) acts.push(`<a class="na light" href="${U.telLink(p.driverPhone)}">${Icon.svg('phone', 16)} ${U.esc(p.driverName || '기사')}님</a>`);
     else if (s.briefing && s.briefing.who) acts.push(`<button class="na light" data-brief="${s.id}">${Icon.svg('file', 16)} 미팅 브리핑</button>`);
-    else if (s.location && s.mode !== 'none') acts.push(`<a class="na light" href="${U.tmapLink(s.location)}">${Icon.svg('nav', 16)} 길안내</a>`);
+    else if (s.location && s.mode !== 'none') acts.push(`<a class="na light" href="${U.tmapLink(AutoNav.dest(s))}">${Icon.svg('nav', 16)} 길안내</a>`);
     else if (!priv) acts.push(`<button class="na light" data-tabgo="chat">${Icon.svg('chat', 16)} 비서톡</button>`);   // 회사 안 회의: 길안내 대신
     const act = this.actualOf(s);
     const canArrive = !overdue && departed && !act.arriveAt && s.mode !== 'none' && !mode.trip && pl.startAt > now;
@@ -306,7 +307,7 @@ const App = {
     const acts = [];
     if (!priv && !s.ackAt) acts.push(`<button class="primary" data-ack="${s.id}">확인</button>`);
     if (s.briefing && s.briefing.who) acts.push(`<button data-brief="${s.id}">${Icon.svg('file', 16)} 브리핑</button>`);
-    if (s.location && go) acts.push(`<a href="${U.tmapLink(s.location)}">${Icon.svg('nav', 16)} 길안내</a>`);
+    if (s.location && go) acts.push(`<a href="${U.tmapLink(AutoNav.dest(s))}">${Icon.svg('nav', 16)} 길안내</a>`);
     if (!priv) acts.push(`<button data-postpone="${s.id}" ${this.sentAbout(s.id, '미뤄') ? 'disabled' : ''}>${this.sentAbout(s.id, '미뤄') ? '변경 요청 보냄' : '변경 요청'}</button>`);
     else acts.push(`<button data-delprivate="${s.id}">삭제</button>`);
     return `<article class="card ${isNext ? 'is-next' : ''} ${priv ? 'private' : ''}">
@@ -390,7 +391,7 @@ const App = {
           ${row('data-edit="contacts"', '연락처 고치기', '')}</div></section>
         <section class="group"><h2>알림 · 화면</h2><div class="box">
           ${notifRow}
-          ${row('data-edit="prep"', '아침 준비 시간', U.durLabel(p.prepMin || 60))}
+          ${row('data-edit="prep"', '아침 준비 · 출근 시간', `준비 ${U.durLabel(p.prepMin || 60)} · 출근 ${U.durLabel(p.commuteMin || 40)}`)}
           ${row('data-autonav', '차에 타면 자동 길안내', '', '차와 연결되면 다음 일정 장소로 내비가 켜져요')}
           ${row('data-edit="name"', '이름', p.name || '')}
           ${sizes}</div></section>
@@ -405,7 +406,8 @@ const App = {
     const f = (name, label, val, type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${U.esc(val ?? '')}"></label>`;
     const body = {
       name: ['이름', f('name', '이름', p.name)],
-      prep: ['아침 준비 시간', `<label>기상부터 출발까지<select name="prepMin">${this.PREP.map(m => `<option value="${m}" ${Number(p.prepMin || 60) === m ? 'selected' : ''}>${U.durLabel(m)}</option>`).join('')}</select></label>`],
+      prep: ['아침 준비 · 출근 시간', `<label>기상부터 출발까지<select name="prepMin">${this.PREP.map(m => `<option value="${m}" ${Number(p.prepMin || 60) === m ? 'selected' : ''}>${U.durLabel(m)}</option>`).join('')}</select></label>`
+        + `<label>집에서 회사까지 (사내 회의로 시작하는 날 기상 계산)<select name="commuteMin">${this.COMMUTE.map(m => `<option value="${m}" ${Number(p.commuteMin || 40) === m ? 'selected' : ''}>${U.durLabel(m)}</option>`).join('')}</select></label>`],
       contacts: ['연락처 고치기', f('ceoPhone', '내 휴대폰 (비서 웹 긴급 전화용)', p.ceoPhone, 'tel') + f('secretaryName', '비서 이름', p.secretaryName) + f('secretaryPhone', '비서 연락처', p.secretaryPhone, 'tel') + f('driverName', '기사님 이름', p.driverName) + f('driverPhone', '기사님 연락처', p.driverPhone, 'tel')],
     }[key];
     if (!body) return;
@@ -415,6 +417,7 @@ const App = {
       e.preventDefault();
       const patch = Object.fromEntries(new FormData(e.target));
       if (patch.prepMin) patch.prepMin = Number(patch.prepMin);
+      if (patch.commuteMin) patch.commuteMin = Number(patch.commuteMin);
       if ('name' in patch && !String(patch.name).trim()) return U.toast('이름을 넣어 주세요');
       try { await Store.saveProfile(patch); m.remove(); U.toast('저장했어요'); this.render(); }
       catch (err) { U.toast('저장하지 못했어요: ' + (err.message || err)); }
@@ -667,7 +670,7 @@ const App = {
     [U.today(), U.addDays(U.today(), 1)].forEach(ymd => this.dayPlan(ymd).forEach(({ s, p }) => {
       p.items.filter(it => ['wake', 'driver', 'leave'].includes(it.kind)).forEach(it => {
         const ms = it.at.getTime() - now;
-        const nav = it.kind === 'leave' && s.mode !== 'driver';   // 직접 운전·택시 등 출발 알림 → 누르면 바로 길안내
+        const nav = it.kind === 'leave' && !AutoNav.byDriver(s);   // KTX·비행기도 역까지 기사 차량이면 길안내 안 붙임   // 직접 운전·택시 등 출발 알림 → 누르면 바로 길안내
         if (ms > 0 && ms < 12 * 3600e3) this._timers.push(setTimeout(() => this.notify(it.title, `${s.title} · ${s.start}${nav ? '\n눌러서 바로 길안내' : ''}`, nav, nav ? 'next-' + s.id : ''), ms));
         // 출발 1시간 전 '다음 일정' 알림: 알림 목록에 남겨 두면 차에 타서 눌러 바로 길안내
         const ms1 = ms - 3600e3;
