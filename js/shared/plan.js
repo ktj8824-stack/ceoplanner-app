@@ -12,8 +12,8 @@ const Plan = {
   // 출시 무료 기간: 이 날까지 결제를 닫고 모든 기능(AI 비서 포함)을 무료로 (버디 · 마이 · 로드 플래너와 같은 날)
   // 결제를 열 때: PAY_OPEN 을 true 로 (서버 billing.js 의 FREE_UNTIL 도 같이)
   PAY_OPEN: false,
-  FREE_UNTIL: '2027-03-31T23:59:59+09:00',
-  FREE_TEXT: '2027년 3월 31일까지 무료',
+  FREE_UNTIL: '2027-02-28T23:59:59+09:00',
+  FREE_TEXT: '2027년 2월 28일까지 무료',
   isFree(now = new Date()) { return !this.PAY_OPEN && now < new Date(this.FREE_UNTIL); },
   FEATURES: {
     basic: ['비서 웹 · 대표 앱 · 기사 계정', '역산 알림 (기상 · 기사 호출 · 출발)', '일정 겹침 · 동선 확인, 비서톡'],
