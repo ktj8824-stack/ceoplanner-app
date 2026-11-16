@@ -515,7 +515,8 @@ const App = {
     const cfg = window.CEOP_CONFIG || {};
     const vo = { url: cfg.SUPABASE_URL, anon: cfg.SUPABASE_KEY, app: 'ceo',
       token: async () => { const { data } = await Store.client.auth.getSession(); return data?.session?.access_token || ''; } };
-    const svOk = typeof ServerVoice !== 'undefined' && ServerVoice.supported() && Store.client && Store.mode !== 'demo';
+    // 개인정보처리방침 변경(OpenAI 추가) 시행일 2026-11-23 부터 사용 (방침의 '시행 7일 전 알림' 약속)
+    const svOk = typeof ServerVoice !== 'undefined' && ServerVoice.supported() && Store.client && Store.mode !== 'demo' && Date.now() >= Date.parse('2026-11-23T00:00:00+09:00');
     const SR = SR0 || svOk;
     const back = document.createElement('div');
     back.className = 'voice-back';
