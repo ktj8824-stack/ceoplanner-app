@@ -510,7 +510,13 @@ const App = {
         <a class="btn primary" style="width:100%" href="${U.esc(Plan.payUrl())}">요금제 바꾸기</a></div>`);
       return m;
     }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SR0 = window.SpeechRecognition || window.webkitSpeechRecognition;
+    // 고음질 서버 받아쓰기(js/shared/voice-stt.js): 로그인한 실제 계정에서만 · 안 되면 기기 받아쓰기
+    const cfg = window.CEOP_CONFIG || {};
+    const vo = { url: cfg.SUPABASE_URL, anon: cfg.SUPABASE_KEY, app: 'ceo',
+      token: async () => { const { data } = await Store.client.auth.getSession(); return data?.session?.access_token || ''; } };
+    const svOk = typeof ServerVoice !== 'undefined' && ServerVoice.supported() && Store.client && Store.mode !== 'demo';
+    const SR = SR0 || svOk;
     const back = document.createElement('div');
     back.className = 'voice-back';
     back.innerHTML = `<div class="voice" role="dialog" aria-label="AI 비서">
@@ -523,7 +529,7 @@ const App = {
         ${SR ? `<button type="button" class="v-mic" data-mic aria-label="말하기">${Icon.svg('mic', 34)}</button>
         <p class="v-hint">말이 끝나면 저절로 멈춰요 · <button type="button" data-typing>글로 쓰기</button></p>` : ''}
       </div></div>`;
-    back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-close]')) { try { rec && rec.abort(); } catch { /* */ } back.remove(); } });
+    back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-close]')) { try { rec && rec.abort(); } catch { /* */ } if (typeof ServerVoice !== 'undefined') ServerVoice.cancel(); back.remove(); } });
     document.body.appendChild(back);
     const log = back.querySelector('#aiLog');
     const f = back.querySelector('#aiForm');
@@ -566,9 +572,29 @@ const App = {
     back.querySelector('[data-typing]')?.addEventListener('click', () => { f.hidden = false; f.q.focus(); });
     const mic = back.querySelector('[data-mic]');
     let rec = null;
-    const listen = () => {
+    const hints = () => { const n = []; try { Store.list().slice(-40).forEach(s => { if (s && s.location) n.push(s.location); }); } catch { /* */ } return [...new Set(n)].slice(-25); };
+    const deviceOff = () => { state.textContent = '마이크를 쓸 수 없어요 · 아래에 글로 적어 주세요'; f.hidden = false; mic.hidden = true; const h = back.querySelector('.v-hint'); if (h) h.hidden = true; };
+    const listen = async () => {
+      if (typeof ServerVoice !== 'undefined' && ServerVoice.active()) { ServerVoice.stop(); return; }
+      if (svOk && await ServerVoice.ready(vo)) {
+        ServerVoice.start(Object.assign({}, vo, {
+          hints: hints(),
+          onState: s => { mic.classList.toggle('on', s === 'listening'); state.textContent = s === 'listening' ? '듣고 있어요' : s === 'busy' ? '받아쓰는 중이에요…' : '마이크를 눌러 말씀해 주세요'; },
+          onText: t => ask(t),
+          onFail: (why, msg) => {
+            if (why === 'mic_denied') return deviceOff();
+            if (why === 'no_recorder') return deviceListen();
+            state.textContent = msg || '잘 못 들었어요. 마이크를 눌러 다시 말씀해 주세요';
+          }
+        }));
+        return;
+      }
+      if (!SR0) return deviceOff();
+      deviceListen();
+    };
+    const deviceListen = () => {
       try {
-        rec = new SR(); rec.lang = 'ko-KR'; rec.interimResults = false;
+        rec = new SR0(); rec.lang = 'ko-KR'; rec.interimResults = false;
         mic.classList.add('on'); state.textContent = '듣고 있어요';
         rec.onresult = e => ask(e.results[0][0].transcript);
         rec.onerror = e => {
