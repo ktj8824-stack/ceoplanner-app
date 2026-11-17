@@ -32,7 +32,8 @@
             const r = await fetch(`${o.url.replace(/\/+$/, '')}/functions/v1/voice-stt`, {
               method: 'POST', headers: { apikey: o.anon || '', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: '{}'
             });
-            return r.status !== 503 && r.status !== 404;
+            // 401 = 이 서버가 받아 주지 않는 로그인(다른 서버의 표·만료) → 녹음하기 전에 기기 받아쓰기로
+            return r.status !== 503 && r.status !== 404 && r.status !== 401;
           } catch (e) { return false; }
         })();
       }
