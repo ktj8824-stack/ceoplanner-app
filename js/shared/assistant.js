@@ -109,6 +109,8 @@
     /** 말에서 일정 고르기: (날짜를 말했으면 그날 안에서) 제목 단어 → 분류 단어 → 다음 일정 */
     pick(t, list, now, ymd) {
       if (ymd) list = list.filter(s => s.date === ymd);
+      // '다음 미팅 · 다음 일정'이면 지금 진행 중인 일정은 빼고 아직 시작 안 한 일정에서 ('다음 주 · 다음 달'은 날짜 말)
+      if (this.saysNext(t)) list = list.filter(s => U.at(s.date, s.start) > now);
       const future = list.filter(s => U.at(s.date, s.end || s.start) > now);
       const words = t.replace(/[,.?!]/g, ' ').split(/\s+/).filter(w => w.length >= 2);
       const byTitle = future.filter(s => words.some(w => s.title && s.title.includes(w.replace(/(을|를|은|는|이|가|도|만)$/, ''))));
@@ -120,6 +122,7 @@
       if (ymd) return this.soonest(future, now) || null;
       return this.upcoming(list, now);
     },
+    saysNext(t) { return /(^|[^다])다음(?!\s*(주|달|번|날))/.test(t); },
     /** 제목·분류 단어로 맞는 일정이 있는지 (취소처럼 조심할 때 '다음 일정'으로 넘어가지 않게) */
     named(t, list, now) {
       const future = list.filter(s => U.at(s.date, s.end || s.start) > now);
@@ -242,6 +245,13 @@
         const sign = /당겨|앞당/.test(t) ? -1 : 1;
         if (!n) return { kind: 'answer', say: `${this.eul(s.title)} 몇 분 ${sign < 0 ? '당길지' : '미룰지'}, 또는 몇 시로 옮길지 같이 말씀해 주세요.` };
         at = U.addMin(from, sign * n);
+      }
+      // 새 시작이 이미 지난 시각이면 카드 대신 되묻기 (진행 중인 일정을 지난 시각으로 옮기지 않게)
+      if (at < now) {
+        const rest = list.filter(x => x.id !== s.id && !x.masked && U.at(x.date, x.start) > now).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+        const nx = rest.find(x => x.category === s.category) || rest[0];
+        if (from <= now) return { kind: 'answer', say: `'${s.title}'${this.batchim(s.title) ? '은' : '는'} 이미 시작했어요.${nx ? ` 다음 일정 '${nx.title}'(${nx.date === s.date ? nx.start : this.when(nx)})${this.batchim(nx.title) ? '을' : '를'} 말씀하신 건가요? 일정 이름을 같이 말씀해 주세요.` : ' 어느 일정을 옮길지 이름을 같이 말씀해 주세요.'}` };
+        return { kind: 'answer', say: `그러면 이미 지난 시각(${U.hm(at)})이 돼요. 몇 분 당길지, 또는 몇 시로 옮길지 다시 말씀해 주세요.` };
       }
       const start = U.hm(at), date = U.ymd(at);
       const end = U.hm(U.addMin(at, dur));
