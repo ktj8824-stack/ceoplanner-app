@@ -38,7 +38,8 @@ const App = {
       ? `<button data-tab="ai" class="mic-tab" aria-label="AI 비서에게 말하기"><span class="mic">${Icon.svg('mic', 28)}</span><span>${l}</span></button>`
       : `<button data-tab="${k}">${Icon.svg(ic, 24)}<span>${l}</span></button>`).join('');
     nav.addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (!b) return; if (b.dataset.tab === 'ai') this.openAI(); else this.go(b.dataset.tab); });
-    Store.on(() => { this.render(); this.scheduleAlerts(); });
+    this._msgAt = (Store.messages().slice(-1)[0] || {}).at || '';
+    Store.on(() => { this.alertUrgent(); this.render(); this.scheduleAlerts(); });
     this.render();
     this.scheduleAlerts();
     // 앱을 다시 볼 때 · 한 시간마다 알림을 다시 예약 (켜 둔 채 날짜가 넘어가도 다음 날 알림이 걸리게)
@@ -343,7 +344,7 @@ const App = {
     const name = this.profile().secretaryName || '비서';
     const list = msgs.map(m => {
       const ref = m.ref && Store.get(m.ref);
-      return `<div class="msg ${m.from === 'ceo' ? 'me' : 'them'} ${m.urgent ? 'urgent' : ''}">${U.esc(m.body)}${ref && m.from !== 'ceo' ? `<button class="ref" data-goto="${U.esc(m.ref)}">${Icon.svg('calendar', 14)} 일정 보기</button>` : ''}<small>${m.urgent ? '긴급 · ' : ''}${U.hm(new Date(m.at))}</small></div>`;
+      return `<div class="msg ${m.from === 'ceo' ? 'me' : 'them'} ${m.urgent ? 'urgent' : ''}">${U.esc(m.body)}${ref && ref.status !== 'cancelled' && m.from !== 'ceo' ? `<button class="ref" data-goto="${U.esc(m.ref)}">${Icon.svg('calendar', 14)} 일정 보기</button>` : ''}<small>${m.urgent ? '긴급 · ' : ''}${U.hm(new Date(m.at))}</small></div>`;
     }).join('') || `<p class="muted small" style="text-align:center">${U.esc(name)}님에게 보낸 메시지가 여기에 표시돼요.</p>`;
     return `<header class="page-head"><h1>비서톡</h1><p>${U.esc(name)}</p></header>
       <div class="chat">${list}</div>
@@ -624,6 +625,14 @@ const App = {
       await Store.send(`${rel} 일정 ${ids.length}건 모두 확인했어요.`, { ref: 'brief:' + ymd });
       U.toast(`${ids.length}건 모두 확인했어요. 비서에게 전달됐어요`);
     } catch (err) { U.toast('확인하지 못했어요: ' + (err.message || err)); }
+  },
+
+  /** 비서가 보낸 긴급 메시지(오늘 일정 취소 · 변경)는 앱 알림으로도 (비서톡을 안 보고 있어도 알게) */
+  alertUrgent() {
+    const msgs = Store.messages(), last = this._msgAt;
+    this._msgAt = (msgs.slice(-1)[0] || {}).at || last;
+    if (this.notifState() !== 'granted') return;
+    msgs.filter(m => m.at > last && m.urgent && m.from !== 'ceo').forEach(m => this.notify(`${this.profile().secretaryName || '비서'} · 급한 알림`, m.body, false, 'msg-' + m.id));
   },
 
   /** 알림 띄우기: 알림 전용 서비스워커가 있으면 그것으로(안드로이드·아이폰 홈 화면 앱은 이 방법만 됨). nav면 누르면 ?go=next → 바로 길안내 */

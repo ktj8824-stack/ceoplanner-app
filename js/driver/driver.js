@@ -25,9 +25,11 @@ const Drv = {
 
   /** 기사님이 누른 단계 (이 폰에 저장 — 기사님은 메시지 읽기 권한이 없어요) */
   state(id) { try { return (JSON.parse(localStorage.getItem('CEOP_DRV') || '{}'))[id] || {}; } catch { return {}; } },
-  saveState(id, kind) {
-    try { const m = JSON.parse(localStorage.getItem('CEOP_DRV') || '{}'); m[id] = { ...(m[id] || {}), [kind]: new Date().toISOString() }; localStorage.setItem('CEOP_DRV', JSON.stringify(m)); } catch { /* */ }
+  saveState(id, kind, extra = {}) {
+    try { const m = JSON.parse(localStorage.getItem('CEOP_DRV') || '{}'); m[id] = { ...(m[id] || {}), [kind]: new Date().toISOString(), ...extra }; localStorage.setItem('CEOP_DRV', JSON.stringify(m)); } catch { /* */ }
   },
+  /** 대기 중이라고 알린 뒤 비서가 대기 장소를 바꿨는지 (출발 전만) → 그 장소 '대기'를 다시 누르게 */
+  moved(s, st) { return !!(st.wait && !st.depart && st.waitAt && st.waitAt !== this.waitFull(s)); },
 
   /** 대기 장소: 출발지 칸이 비면 그날 바로 앞 일정 장소 (없으면 본사).
       '본사 15층 대회의실'처럼 층 · 회의실까지 적혀 있어도 기사님께는 건물 이름만 ('본사') */
@@ -46,6 +48,11 @@ const Drv = {
       && (s.mode === 'driver' || (s.trip && s.trip.accessMode === 'driver')));
     return Backtime.planDay(list, { prepMin: p.prepMin });
   },
+  /** 취소된 기사 차량 일정 — 지우지 않고 '취소됨' 한 줄로 (헛걸음하지 않게) */
+  cancelled(ymd) {
+    return Store.list().filter(s => s.date === ymd && s.status === 'cancelled' && s.visibility !== 'private' && !s.masked
+      && (s.mode === 'driver' || (s.trip && s.trip.accessMode === 'driver'))).sort((a, b) => a.start.localeCompare(b.start));
+  },
 
   render() {
     const root = document.getElementById('root');
@@ -58,7 +65,7 @@ const Drv = {
       <header class="drv-head"><div><small>${U.dateLabel(this.day)}</small><h1>${U.esc(p.driverName || '기사')}님 배차표</h1></div>
         ${p.secretaryPhone ? `<a class="drv-call" href="${U.telLink(p.secretaryPhone)}">${Icon.svg('phone', 18)} ${U.esc(p.secretaryName || '비서')}</a>` : ''}</header>
       <nav class="drv-tabs">${tab(t, '오늘')}${tab(t1, '내일')}</nav>
-      <main class="drv-list">${jobs.length ? jobs.map(({ s, p: pl }) => this.card(s, pl, now)).join('') : '<div class="drv-empty"><p>이 날은 배차가 없어요.</p></div>'}</main>
+      <main class="drv-list">${this.cancelled(this.day).map(s => `<article class="drv-card"><div class="dc-top"><b>${s.start} ${U.esc(s.title)}</b><span class="dc-pill late">취소됨</span></div><small class="dc-full">대기 안 해도 돼요 · ${U.esc(this.waitPlace(s))} → ${U.esc(s.location || '현장')}</small></article>`).join('')}${jobs.length ? jobs.map(({ s, p: pl }) => this.card(s, pl, now)).join('') : '<div class="drv-empty"><p>이 날은 배차가 없어요.</p></div>'}</main>
       <p class="drv-foot">${Store.mode === 'demo' ? '데모 화면이에요 · ' : ''}누른 상태는 대표님과 비서실에 바로 전달돼요<br><button type="button" class="drv-wd" data-withdraw>회원 탈퇴</button></p>
       ${Store.mode === 'demo' ? '' : '<button type="button" class="drv-logout" data-logout>로그아웃</button>'}`;
     root.querySelector('[data-withdraw]')?.addEventListener('click', () => U.withdraw());
@@ -68,7 +75,8 @@ const Drv = {
   },
 
   card(s, pl, now) {
-    const st = this.state(s.id);
+    const raw = this.state(s.id), moved = this.moved(s, raw);
+    const st = moved ? { ...raw, wait: null } : raw;   // 바뀐 장소에서 다시 '대기 중'을 누르게
     const nextIdx = this.STEPS.findIndex(x => !st[x.kind]);
     const trip = Backtime.isTrip(s.mode);
     const dest = trip ? (s.trip && s.trip.station) || '역 · 공항' : s.location || '현장';
@@ -80,9 +88,9 @@ const Drv = {
     const next = nextIdx >= 0 && !past ? this.STEPS[nextIdx] : null;
     return `<article class="drv-card ${past ? 'past' : ''}">
       <div class="dc-top"><div class="dc-call"><small>대기 시각</small><b class="num">${U.hm(callAt)}</b></div>
-        <span class="dc-pill ${late ? 'late' : soon <= 30 && soon > -30 && !st.depart ? 'soon' : ''}">${past ? '끝남' : late ? `대기 ${U.durLabel(-soon)} 지남` : soon > 0 ? (soon < 60 ? `${soon}분 뒤` : `${U.durLabel(soon)} 뒤`) : st.depart ? '운행 중' : '대기 시간'}</span></div>
+        <span class="dc-pill ${late || moved ? 'late' : soon <= 30 && soon > -30 && !st.depart ? 'soon' : ''}">${moved && !past ? '픽업 장소 바뀜' : past ? '끝남' : late ? `대기 ${U.durLabel(-soon)} 지남` : soon > 0 ? (soon < 60 ? `${soon}분 뒤` : `${U.durLabel(soon)} 뒤`) : st.depart ? '운행 중' : '대기 시간'}</span></div>
       <dl class="dc-route">
-        <dt>대기 장소</dt><dd>${U.esc(this.waitPlace(s))}${this.waitFull(s) !== this.waitPlace(s) ? `<small class="dc-full">${U.esc(this.waitFull(s))}</small>` : ''}</dd>
+        <dt>대기 장소</dt><dd>${U.esc(this.waitPlace(s))}${this.waitFull(s) !== this.waitPlace(s) ? `<small class="dc-full">${U.esc(this.waitFull(s))}</small>` : ''}${moved ? `<small class="dc-full">픽업 장소가 바뀌었어요 · 예전 ${U.esc(U.building(raw.waitAt))}</small>` : ''}</dd>
         <dt>출발</dt><dd class="num">${U.hm(pl.leaveAt)}</dd>
         <dt>${trip ? '역 · 공항' : '도착 목표'}</dt><dd><b>${U.esc(dest)}</b> <span class="num">${trip ? (s.trip && s.trip.departTime ? `${s.trip.departTime} 출발편` : '') : U.hm(pl.arriveBy)}</span></dd>
         <dt>일정</dt><dd>${s.start} ${U.esc(s.title)}</dd>
@@ -103,7 +111,7 @@ const Drv = {
     }[kind];
     try {
       await Store.send(body, { ref: id });
-      this.saveState(id, kind);
+      this.saveState(id, kind, kind === 'wait' ? { waitAt: this.waitFull(s) } : {});
       U.toast({ wait: '대기 중이라고 알렸어요', depart: '출발을 알렸어요', arrive: '도착을 알렸어요' }[kind]);
       this.render();
     } catch (err) { U.toast('보내지 못했어요. 인터넷을 확인하고 다시 눌러 주세요'); }
