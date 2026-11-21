@@ -232,7 +232,6 @@
       if (!s) return { kind: 'answer', say: '바꿀 일정을 찾지 못했어요. 일정 이름을 같이 말씀해 주세요.' };
       if (s.masked) return { kind: 'answer', say: '그 일정은 바꿀 수 없어요.' };
       if (/장소|식당|가게|곳/.test(t) && !this.minutes(t) && !this.time(t)) return this.place(t, s);
-      const dur = U.diffMin(U.at(s.date, s.end || s.start), U.at(s.date, s.start));
       const from = U.at(s.date, s.start);
       let at = null;   // 새 시작 (날짜 포함 — 자정을 넘기면 다음 날 · 앞당겨 자정 전이면 전날)
       const abs = /(로|으로)\s*(미뤄|옮겨|바꿔|변경)|에\s*(해|하자)/.test(t) ? this.time(t) : null;
@@ -253,9 +252,46 @@
         if (from <= now) return { kind: 'answer', say: `'${s.title}'${this.batchim(s.title) ? '은' : '는'} 이미 시작했어요.${nx ? ` 다음 일정 '${nx.title}'(${nx.date === s.date ? nx.start : this.when(nx)})${this.batchim(nx.title) ? '을' : '를'} 말씀하신 건가요? 일정 이름을 같이 말씀해 주세요.` : ' 어느 일정을 옮길지 이름을 같이 말씀해 주세요.'}` };
         return { kind: 'answer', say: `그러면 이미 지난 시각(${U.hm(at)})이 돼요. 몇 분 당길지, 또는 몇 시로 옮길지 다시 말씀해 주세요.` };
       }
+      return this.moveCard(s, at, list, now);
+    },
+
+    /** 'AI가 낸 다른 시각' 버튼(예: '15:40으로')을 누르면 그 시각으로 다시 확인 카드 — alt: { id, date, start } */
+    moveTo(alt, ctx) {
+      const now = ctx.now || new Date();
+      const list = (ctx.schedules || []).filter(s => s.status !== 'cancelled');
+      const s = list.find(x => x.id === alt.id);
+      if (!s) return { kind: 'answer', say: '그 일정을 찾지 못했어요.' };
+      return this.moveCard(s, U.at(alt.date, alt.start), list, now);
+    },
+
+    /** 새 계획의 기사님 대기 시각이 이미 지났으면: 한 줄 안내 + 가장 빠른 가능한 시각(10분 단위)
+        반환 null 또는 { line, alt: { id, date, start, label } } */
+    driverPast(orig, next, now) {
+      if (next.mode !== 'driver') return null;
+      const p = Backtime.plan(next);
+      if (!p.driverCallAt || p.driverCallAt >= now) return null;
+      const late = Math.max(1, Math.ceil((now - p.driverCallAt) / 60000));
+      const reach = U.addMin(now, Number(next.travelMin || 0) + Number(next.bufferMin ?? Backtime.DEFAULT_BUFFER_MIN));   // 지금 바로 출발하면
+      // 가장 빠른 시각: 기사님 대기 시각이 지금 이후가 되도록 늦추고 10분 단위로 올림
+      let at = new Date(U.at(next.date, next.start).getTime() + (now - p.driverCallAt));
+      at.setSeconds(0, 0);
+      const r = at.getMinutes() % 10; if (r) at = U.addMin(at, 10 - r);
+      const start = U.hm(at);
+      const fromAt = U.at(orig.date, orig.start);
+      return {
+        line: `기사님 대기 ${U.hm(p.driverCallAt)} · 이미 ${late}분 지났어요 · 지금 출발하면 ${U.hm(reach)} 도착`,
+        // 원래 시각보다 늦어지면 '당기기'가 아니니 다른 시각은 내지 않아요
+        alt: at < fromAt ? { id: orig.id, date: U.ymd(at), start, label: this.ro(start) } : null,
+      };
+    },
+
+    /** 시각 변경 확인 카드 (s: 원래 일정, at: 새 시작) */
+    moveCard(s, at, list, now) {
       const start = U.hm(at), date = U.ymd(at);
+      const dur = U.diffMin(U.at(s.date, s.end || s.start), U.at(s.date, s.start));
       const end = U.hm(U.addMin(at, dur));
       const next = { ...s, date, start, end };
+      const drv = this.driverPast(s, next, now);
       const all = [...list.filter(x => x.id !== s.id), next];
       const warns = [...Backtime.conflictsOn(all, date), ...Backtime.conflictsOn(all, U.addDays(date, 1))].filter(w => w.a === next || w.b === next);
       const priv = this.isPrivate(s);
@@ -264,8 +300,9 @@
       return {
         kind: 'action',
         say: `${this.eul(s.title)} ${moved ? `${this.dayLabel(date)} ` : ''}${this.ro(start)} 옮길까요?`,
-        lines: [`${s.title}`, `${moved ? `${this.dayLabel(s.date)} ` : ''}${s.start}–${s.end} → ${toLabel}–${end}`, ...(moved ? [`날짜가 ${this.dayLabel(date)}로 바뀌어요`] : []), ...warns.map(w => `주의: ${w.msg}`), priv ? '개인 일정이라 비서에게는 알리지 않아요' : '바꾸면 비서에게 자동으로 알려요'],
+        lines: [`${s.title}`, `${moved ? `${this.dayLabel(s.date)} ` : ''}${s.start}–${s.end} → ${toLabel}–${end}`, ...(moved ? [`날짜가 ${this.dayLabel(date)}로 바뀌어요`] : []), ...(drv ? [drv.line] : []), ...warns.map(w => `주의: ${w.msg}`), priv ? '개인 일정이라 비서에게는 알리지 않아요' : '바꾸면 비서에게 자동으로 알려요'],
         changes: [{ op: 'upsert', schedule: next }],
+        alt: drv && drv.alt,
         notify: priv ? null : { body: `대표님이 '${s.title}' 시간을 ${s.start} → ${moved ? `${this.dayLabel(date)} ` : ''}${this.ro(start)} 바꿨어요. 상대방께 전달 부탁해요.`, ref: s.id },
       };
     },

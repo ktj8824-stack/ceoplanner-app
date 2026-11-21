@@ -231,7 +231,7 @@ const App = {
       <div class="next-card">
         <div class="nc-head"><div><small>${headLabel} ${s.start}</small><b>${priv ? Icon.svg('lock', 16) + ' ' : ''}${U.esc(s.title)}</b>${sub ? `<span>${sub}</span>` : ''}</div>
           <span class="pill ${overdue ? 'late' : ''}">${pill}</span></div>
-        ${stepHtml}${this.driverLine(s)}
+        ${stepHtml}${this.driverLine(s)}${pl.pickup ? `<p class="drv-line pickup">${Icon.svg('car', 15)} 도착하면 기사님이 ${U.esc(pl.pickup.spot || '도착 출구')}에서 대기 · <b class="num">${U.hm(pl.pickup.waitAt)}</b><small>도착 ${U.hm(pl.pickup.arriveAt)} + 짐 ${pl.pickup.bagMin}분</small></p>` : ''}
         <div class="nc-acts n${acts.length}">${acts.join('')}</div>${ack}
       </div></header>`;
   },
@@ -540,13 +540,20 @@ const App = {
     const ask = text => {
       if (!text.trim()) return;
       add('v-said', `“${U.esc(text)}”`);
-      const r = Assistant.interpret(text, { schedules: Store.list(), now: new Date(), profile: this.profile() });
+      show(Assistant.interpret(text, { schedules: Store.list(), now: new Date(), profile: this.profile() }));
+    };
+    const show = r => {
       if (r.kind !== 'action') return add('v-bot', U.esc(r.say));
       const op = (r.changes[0] || {}).op;
       const yes = !r.changes.length ? '비서에게 보내기' : op === 'cancel' ? '취소하기' : r.changes[0].schedule && !Store.get(r.changes[0].schedule.id) ? '등록하기' : '이대로 바꾸기';
-      const card = add('v-card', `<span class="k">확인해 주세요</span><b>${U.esc(r.say)}</b><ul>${r.lines.map(l => `<li class="${l.startsWith('주의') ? 'warn' : ''}">${U.esc(l)}</li>`).join('')}</ul>
+      const card = add('v-card', `<span class="k">확인해 주세요</span><b>${U.esc(r.say)}</b><ul>${r.lines.map(l => `<li class="${/^(주의|기사님 대기)/.test(l) ? 'warn' : ''}">${U.esc(l)}</li>`).join('')}</ul>
         ${r.choices && r.choices.length ? `<div class="ai-pick"><span class="lbl">대표님이 좋았다고 한 곳</span>${r.choices.map((c, i) => `<button type="button" data-pick="${i}"><b>${U.esc(c.location)}</b><small>${U.esc(c.sub)}</small></button>`).join('')}</div>` : ''}
-        <div class="ai-do"><button class="btn" data-no>${op === 'cancel' ? '그대로 두기' : '취소'}</button><button class="btn primary" data-yes>${yes}</button></div>`);
+        <div class="ai-do"><button class="btn" data-no>${op === 'cancel' ? '그대로 두기' : '취소'}</button>${r.alt ? `<button class="btn" data-alt>${U.esc(r.alt.label)}</button>` : ''}<button class="btn primary" data-yes>${yes}</button></div>`);
+      // 기사님 대기 시각이 이미 지났으면 가장 빠른 가능한 시각으로 다시 여쭤보기
+      card.querySelector('[data-alt]')?.addEventListener('click', () => {
+        card.querySelector('.ai-do').innerHTML = `<span class="muted small">${U.esc(r.alt.label)} 다시 여쭤볼게요</span>`;
+        show(Assistant.moveTo(r.alt, { schedules: Store.list(), now: new Date(), profile: this.profile() }));
+      });
       card.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => {
         const c = r.choices[b.dataset.pick], s = r.changes[0].schedule, on = !b.classList.contains('on');
         card.querySelectorAll('[data-pick]').forEach(x => x.classList.remove('on'));

@@ -46,3 +46,7 @@ body.driver { background: var(--porcelain, #F4F5F7); }
 .dc-pill.late { background: var(--signal, #C2410C); color: #fff; }
 .dc-full { display: block; margin-top: 2px; font-size: 13px; color: var(--slate); font-weight: 500; }
 .drv-logout { display: block; width: calc(100% - 32px); margin: 8px 16px 24px; min-height: 52px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+/* 도착지 마중 (2026-11-21) */
+.drv-card.pickup { border-left: 4px solid var(--brass); }
+.dc-pk { margin: 10px 0 0; font-size: 16px; font-weight: 700; color: var(--brass-ink); }
+.drv-card.pickup .dc-steps { grid-template-columns: repeat(2, 1fr); }

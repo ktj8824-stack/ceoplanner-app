@@ -480,6 +480,7 @@ nav.tabs .mic-tab > span:last-child { transform: translateY(16px); }
 .drv-line.eta b { color: #fff; margin-left: 2px; }
 .drv-line.eta small { margin-left: 6px; font-size: 12px; font-weight: 500; color: #9AA6B6; }
 .drv-line.eta.late b { color: #FFB59E; }
+.drv-line.pickup { flex-wrap: wrap; color: #E9D7B0; } .drv-line.pickup b { color: #fff; } .drv-line.pickup small { font-size: 12px; font-weight: 500; color: #9AA6B6; }
 .late-box { margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(194, 65, 12, .18); border: 1px solid rgba(255, 140, 110, .45); color: #FFD3C4; border-radius: 12px; padding: 8px 10px; font-size: 14px; }
 .late-box span { display: block; flex: 1; line-height: 1.45; word-break: keep-all; }
 .late-box span svg { vertical-align: -3px; margin-right: 4px; }

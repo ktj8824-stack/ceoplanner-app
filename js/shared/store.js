@@ -190,8 +190,10 @@ const Store = {
       const { error } = await this.client.from('ceo_schedules').update({ actual }).eq('id', id);
       if (error) throw error;
       await this._reload();
-    } else { s.actual = actual; this._saveDemo(); }
+    } else { s.actual = actual; if (fields.invited) s.invitedAt = this._invitedAt(actual); this._saveDemo(); }
   },
+  /** 손님 초대장을 보낸 시각 (actual.invited.at → ISO) — 일정의 s.invitedAt */
+  _invitedAt(actual) { const at = actual && actual.invited && actual.invited.at; return at ? new Date(at).toISOString() : null; },
 
   /** 대표가 여러 일정을 한 번에 확인 (브리핑 '모두 확인') */
   async ackMany(ids) {
@@ -427,7 +429,7 @@ const Store = {
       location: r.location || '', mode: r.mode, travelMin: r.travel_min, bufferMin: r.buffer_min,
       visibility: r.visibility, trip: r.trip, briefing: r.briefing || {}, status: r.status,
       ackAt: r.ack_at, createdBy: r.created_role, masked: !!r.masked, origin: r.origin || '', nudgedAt: r.nudged_at || null,
-      actual: r.actual || {}, series: r.series || null,
+      actual: r.actual || {}, series: r.series || null, invitedAt: this._invitedAt(r.actual),
     };
   },
 };
