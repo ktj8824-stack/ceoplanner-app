@@ -38,6 +38,18 @@
 
     isTrip(mode) { return !!(this.MODES[mode] && this.MODES[mode].trip); },
 
+    // 도착지 마중 — 짐 찾는 시간 기본값 (국제선 40분 · 국내선 20분 · KTX 10분)
+    PICKUP_BAG_MIN: { intl: 40, flight: 20, train: 10 },
+    pickupBagDefault(mode, intl) { return mode === 'flight' ? (intl ? this.PICKUP_BAG_MIN.intl : this.PICKUP_BAG_MIN.flight) : this.PICKUP_BAG_MIN.train; },
+
+    /** 마중만 하는 일정인지: 제목에 '픽업 · 마중', 도착지가 공항 · 역, 출발지가 본사(비어 있으면 본사)
+        → 대표님이 움직이는 일정이 아니라 기사님 심부름이라 기상 · 기사 호출 · 이동 부족 경고를 붙이지 않아요 */
+    isPickupOnly(s) {
+      if (!s || !/픽업|마중/.test(s.title || '') || this.isTrip(s.mode)) return false;
+      if (!/공항|터미널|\bT[12]\b|역$|역\s|KTX|SRT/i.test(s.location || '')) return false;
+      return !s.origin || /본사|회사|사옥/.test(s.origin);
+    },
+
     /**
      * 일정 하나의 역산 결과.
      * s: { date, start, end, mode, travelMin, bufferMin, category, location, trip? }
@@ -55,7 +67,8 @@
       const buffer = mode === 'none' ? 0 : Number(s.bufferMin ?? this.DEFAULT_BUFFER_MIN);
       const arriveBy = U.addMin(startAt, -cat.arriveEarlyMin);
       const items = [];
-      let leaveAt, warn = '';
+      const pickupOnly = this.isPickupOnly(s);
+      let leaveAt, warn = '', pickup = null;
 
       if (mode === 'none') {
         leaveAt = arriveBy;
@@ -74,25 +87,37 @@
           let tripArr = U.at(s.date, t.arriveTime);
           if (tripArr < departAt) tripArr = U.addMin(tripArr, 24 * 60);   // 국제선 다음 날 도착
           items.push({ at: tripArr, kind: 'move', icon: '📍', title: '도착역·공항 도착', detail: s.travelMin ? `현장까지 ${U.durLabel(s.travelMin)}` : '' });
-          const reach = U.addMin(tripArr, Number(s.travelMin || 0));
+          // 도착지 마중: 도착 + 짐 찾는 시간에 기사님이 마중 장소에서 대기
+          let ready = tripArr;
+          if (t.pickup && t.pickup.on) {
+            const bagMin = Number(t.pickup.bagMin ?? this.pickupBagDefault(mode, t.intl));
+            const spot = String(t.pickup.spot || '').trim();
+            ready = U.addMin(tripArr, bagMin);
+            pickup = { arriveAt: tripArr, waitAt: ready, bagMin, spot };
+            items.push({ at: ready, kind: 'pickup', icon: '🚘', title: `기사님 마중 대기${spot ? ` · ${spot}` : ''}`, detail: `도착 ${U.hm(tripArr)} + 짐 찾기 ${bagMin}분` });
+          }
+          const reach = U.addMin(ready, Number(s.travelMin || 0));
           const late = U.diffMin(reach, arriveBy);
           if (late > 0) warn = `도착 후 현장까지 가면 ${U.hm(reach)}이라, 시작 전 도착 시각(${U.hm(arriveBy)})보다 ${late}분 늦어요`;
         }
       } else {
         const travel = Number(s.travelMin || 0) + (def.extraMin || 0);
         leaveAt = U.addMin(arriveBy, -(travel + buffer));
-        items.push({ at: leaveAt, kind: 'leave', icon: def.emoji, title: `${def.label} 출발`, detail: `이동 ${U.durLabel(s.travelMin || 0)}${def.extraMin ? ` + ${def.extraLabel} ${def.extraMin}분` : ''} + 여유 ${buffer}분` });
+        if (pickupOnly) items.push({ at: leaveAt, kind: 'drive', icon: def.emoji, title: '기사님 마중 출발', detail: `${s.origin || '본사'} → ${s.location} · 이동 ${U.durLabel(s.travelMin || 0)}` });
+        else items.push({ at: leaveAt, kind: 'leave', icon: def.emoji, title: `${def.label} 출발`, detail: `이동 ${U.durLabel(s.travelMin || 0)}${def.extraMin ? ` + ${def.extraLabel} ${def.extraMin}분` : ''} + 여유 ${buffer}분` });
       }
 
       let driverCallAt = null;
-      if (mode === 'driver' || (def.trip && s.trip && s.trip.accessMode === 'driver')) {
+      if (!pickupOnly && (mode === 'driver' || (def.trip && s.trip && s.trip.accessMode === 'driver'))) {
         driverCallAt = U.addMin(leaveAt, -this.MODES.driver.pickupMin);
         items.unshift({ at: driverCallAt, kind: 'driver', icon: '📞', title: '기사님 대기 요청', detail: `출발 ${this.MODES.driver.pickupMin}분 전 차량 대기` });
       }
 
       let wakeAt = null;
       const prep = Number(opts.prepMin ?? this.DEFAULT_PREP_MIN);
-      if (opts.firstOfDay && mode !== 'none') {
+      if (pickupOnly) {
+        // 마중만 하는 일정: 대표님 기상 · 출근 계산 없음
+      } else if (opts.firstOfDay && mode !== 'none') {
         wakeAt = U.addMin(leaveAt, -prep);
         items.unshift({ at: wakeAt, kind: 'wake', icon: '⏰', title: '기상', detail: `준비 ${U.durLabel(prep)}` });
       } else if (opts.firstOfDay && s.category !== 'personal') {
@@ -102,14 +127,16 @@
         items.unshift({ at: wakeAt, kind: 'wake', icon: '⏰', title: '기상', detail: `준비 ${U.durLabel(prep)} · 출근 ${U.durLabel(commute)}` });
       }
 
-      if (mode !== 'none') {
+      if (pickupOnly && mode !== 'none') {
+        items.push({ at: arriveBy, kind: 'drive', icon: '📍', title: `${s.location} 도착 · 마중 대기`, detail: `시작 ${cat.arriveEarlyMin}분 전` });
+      } else if (mode !== 'none') {
         items.push({ at: arriveBy, kind: 'arrive', icon: '📍', title: cat.arriveLabel || `${s.location || '현장'} 도착`, detail: `시작 ${cat.arriveEarlyMin}분 전` });
       }
       items.push({ at: startAt, kind: 'start', icon: cat.emoji, title: `${s.title || cat.label} 시작`, detail: s.location || '' });
       if (s.end && s.end !== s.start) items.push({ at: endAt, kind: 'end', icon: '✅', title: '종료', detail: '' });
 
       items.sort((a, b) => a.at - b.at);
-      return { arriveBy, leaveAt, driverCallAt, wakeAt, startAt, endAt, items, warn };
+      return { arriveBy, leaveAt, driverCallAt, wakeAt, startAt, endAt, items, warn, pickup, pickupOnly };
     },
 
     /** 하루 일정 전체 역산 — 기상은 그날 첫 일정에만 붙여요.
@@ -119,6 +146,8 @@
       const sorted = [...list].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
       let first = true;
       return sorted.map(s => {
+        // 마중만 하는 일정(기사님 심부름)은 대표님 '그날 첫 일정'으로 치지 않아요
+        if (this.isPickupOnly(s)) return { s, p: this.plan(s, { ...opts, firstOfDay: false }) };
         const moving = s.mode && s.mode !== 'none';
         const p = this.plan(s, { ...opts, firstOfDay: first && (moving || (s.category !== 'personal' && !s.masked && s.status !== 'cancelled')) });
         if (moving || (s.category !== 'personal' && !s.masked && s.status !== 'cancelled')) first = false;
@@ -132,7 +161,8 @@
      * 반환: [{ a, b, shortMin, msg }]
      */
     conflicts(list, opts = {}) {
-      const day = list.map(s => ({ s, p: this.plan(s, opts) })).sort((a, b) => a.p.startAt - b.p.startAt);
+      // 마중만 하는 일정은 기사님만 움직여요 → 대표님 일정과 이동 부족 · 겹침 경고를 만들지 않음
+      const day = list.map(s => ({ s, p: this.plan(s, opts) })).filter(d => !d.p.pickupOnly).sort((a, b) => a.p.startAt - b.p.startAt);
       const out = [];
       for (let i = 1; i < day.length; i++) {
         const prev = day[i - 1], cur = day[i];
