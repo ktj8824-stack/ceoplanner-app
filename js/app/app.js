@@ -124,7 +124,7 @@ const App = {
   /** 기사님 최근 상태 한 줄 (대기 중 · 출발 · 현장 도착) + 출발했으면 도착 예상 · 늦을 것 같으면 경고 */
   driverLine(s) {
     const msgs = Store.messages();
-    const st = (s.mode === 'driver' || (s.trip && s.trip.accessMode === 'driver')) ? Learn.driverStatus(s, msgs) : null;
+    const st = Backtime.driverLeg(s) ? Learn.driverStatus(s, msgs) : null;
     const name = U.esc(this.profile().driverName || '기사');
     const txt = st && { wait: '대기 중', depart: '출발했어요', arrive: '현장 도착' }[st.kind];
     const e = Learn.eta(s, msgs, Store.list());
@@ -196,7 +196,8 @@ const App = {
     // 출발 시각이 지났는데 '출발했어요'를 안 눌렀으면 출발 단계에서 멈추고 알려 줌
     const departed = this.departedAt(s.id);
     const leaveIdx = steps.findIndex(st => st.kind === 'leave');
-    const overdue = leaveIdx >= 0 && !departed && steps[leaveIdx].at <= now && pl.startAt > now ? U.diffMin(now, steps[leaveIdx].at) : 0;
+    // 해외 출발 구간(국제선 귀국편 · 택시)은 기사님 · 비서가 챙길 출발이 아니라 '출발 지남'으로 멈추지 않아요
+    const overdue = leaveIdx >= 0 && !departed && !pl.departAbroad && steps[leaveIdx].at <= now && pl.startAt > now ? U.diffMin(now, steps[leaveIdx].at) : 0;
     // 출발을 기록했으면(대표 또는 기사님) 출발 단계까지는 끝난 것으로
     let cur = overdue ? leaveIdx : steps.findIndex(st => st.at > now);   // 지금 기다리는 단계 (-1 = 모두 지남 → 진행 중)
     if (departed && leaveIdx >= 0 && cur >= 0 && cur <= leaveIdx) cur = leaveIdx + 1 < steps.length ? leaveIdx + 1 : -1;
@@ -231,7 +232,7 @@ const App = {
       <div class="next-card">
         <div class="nc-head"><div><small>${headLabel} ${s.start}</small><b>${priv ? Icon.svg('lock', 16) + ' ' : ''}${U.esc(s.title)}</b>${sub ? `<span>${sub}</span>` : ''}</div>
           <span class="pill ${overdue ? 'late' : ''}">${pill}</span></div>
-        ${stepHtml}${this.driverLine(s)}${pl.pickup ? `<p class="drv-line pickup">${Icon.svg('car', 15)} 도착하면 기사님이 ${U.esc(pl.pickup.spot || '도착 출구')}에서 대기 · <b class="num">${U.hm(pl.pickup.waitAt)}</b><small>도착 ${U.hm(pl.pickup.arriveAt)} + 짐 ${pl.pickup.bagMin}분</small></p>` : ''}
+        ${stepHtml}${this.driverLine(s)}${pl.pickup ? `<p class="drv-line pickup">${Icon.svg('car', 15)} 도착하면 기사님이 ${U.esc([pl.pickup.station, pl.pickup.spot].filter(Boolean).join(' ') || '도착 출구')}에서 대기 · <b class="num">${U.hm(pl.pickup.waitAt)}</b><small>도착 ${U.hm(pl.pickup.arriveAt)} + 짐 ${pl.pickup.bagMin}분</small></p>` : ''}
         <div class="nc-acts n${acts.length}">${acts.join('')}</div>${ack}
       </div></header>`;
   },
@@ -718,7 +719,7 @@ const App = {
     const add = (id, at, title, body, next) => { const t = at.getTime(); if (t > now && t < until) list.push({ id, fireAt: at.toISOString(), title, body, next: !!next }); };
     [U.today(), U.addDays(U.today(), 1), U.addDays(U.today(), 2)].forEach(ymd => this.dayPlan(ymd).forEach(({ s, p }) => {
       p.items.filter(it => ['wake', 'driver', 'leave'].includes(it.kind)).forEach(it => {
-        const nav = it.kind === 'leave' && !AutoNav.byDriver(s);
+        const nav = it.kind === 'leave' && !AutoNav.byDriver(s) && !p.departAbroad;   // 해외 출발 구간은 T맵 길안내 안 붙임
         add(`ceo-${s.id}-${it.kind}`, it.at, it.title, `${s.title} · ${s.start}${nav ? '\n눌러서 바로 길안내' : ''}`, nav);
         if (nav) add(`ceo-${s.id}-pre`, new Date(it.at.getTime() - 3600e3), `다음 일정 · ${U.hm(it.at)} 출발`, `${s.title}${AutoNav.dest(s) ? ' · ' + AutoNav.dest(s) : ''}\n차에 타면 눌러서 바로 길안내`, true);
       });
@@ -742,7 +743,7 @@ const App = {
     [U.today(), U.addDays(U.today(), 1)].forEach(ymd => this.dayPlan(ymd).forEach(({ s, p }) => {
       p.items.filter(it => ['wake', 'driver', 'leave'].includes(it.kind)).forEach(it => {
         const ms = it.at.getTime() - now;
-        const nav = it.kind === 'leave' && !AutoNav.byDriver(s);   // KTX·비행기도 역까지 기사 차량이면 길안내 안 붙임   // 직접 운전·택시 등 출발 알림 → 누르면 바로 길안내
+        const nav = it.kind === 'leave' && !AutoNav.byDriver(s) && !p.departAbroad;   // KTX·비행기도 역까지 기사 차량이면 길안내 안 붙임 · 해외 출발 구간도   // 직접 운전·택시 등 출발 알림 → 누르면 바로 길안내
         if (ms > 0 && ms < 12 * 3600e3) this._timers.push(setTimeout(() => this.notify(it.title, `${s.title} · ${s.start}${nav ? '\n눌러서 바로 길안내' : ''}`, nav, nav ? 'next-' + s.id : ''), ms));
         // 출발 1시간 전 '다음 일정' 알림: 알림 목록에 남겨 두면 차에 타서 눌러 바로 길안내
         const ms1 = ms - 3600e3;

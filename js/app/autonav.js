@@ -42,7 +42,7 @@ const AutoNav = {
   /** 길안내 목적지: KTX · 비행기는 최종 목적지가 아니라 역 · 공항 */
   dest(s) { return (Backtime.isTrip(s.mode) && s.trip && s.trip.station) || s.location; },
   /** 기사님이 운전하는 이동(기사 차량 · 역까지 기사 차량)은 대표님께 길안내가 필요 없어요 */
-  byDriver(s) { return s.mode === 'driver' || !!(Backtime.isTrip(s.mode) && s.trip && s.trip.accessMode === 'driver'); },
+  byDriver(s) { return Backtime.driverLeg(s); },
 
   /* ── 출발 1시간 전부터 '다음 일정' 알림을 알림 목록에 남겨 두기 ──
      미리 눌러서 사라졌으면 앱을 떠날 때 다시 올려 두고(소리 없이), 길안내를 시작하면 지움. 기사 운전 일정은 제외 */
