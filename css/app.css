@@ -488,7 +488,18 @@ nav.tabs .mic-tab > span:last-child { transform: translateY(16px); }
 .late-box small { color: #FFD3C4; flex: none; }
 /* '10분 늦어요'를 보낸 뒤 (같은 알림 두 번 안 가게) · 기사 차량 픽업 장소가 바뀌었을 때 */
 .na.sent, .na:disabled { color: #9FD3B8; border-color: #2F5A4A; font-size: 12.5px; line-height: 1.2; white-space: normal; text-align: center; word-break: keep-all; padding: 0 6px; }
-.drv-line.late-sent { flex-wrap: wrap; color: #9FD3B8; } .drv-line.late-sent b { color: #fff; } .drv-line.late-sent small { font-size: 12px; font-weight: 500; color: #9AA6B6; }
+/* '늦어요'를 보낸 뒤 도착 시각 한 줄: '11:10쯤 도착 (10분 늦음)' + '✓ 비서에게 알림 10:45' */
+.drv-line.late-sent { margin: 0; align-items: center; gap: 8px; padding: 11px 12px; font-size: 15px; font-weight: 700; color: #fff; background: rgba(224, 104, 78, .16); border: 1px solid rgba(255, 140, 110, .45); border-radius: 12px; }
+.drv-line.late-sent > svg { flex: none; }
+.drv-line.late-sent b { color: #FFB59E; }
+.drv-line.late-sent small { display: flex; align-items: center; gap: 3px; margin-top: 2px; font-size: 13px; font-weight: 600; color: #9FD3B8; }
+.nc-head .pill.lt { background: #E0684E; color: #fff; }
+.steps li b.late-at { color: #FFB59E; }
+/* 기사님 상태 작은 한 줄 ('박기사님 운행 중 · 10:12 출발') */
+.drv-line.drv-st { margin: 0 2px; font-size: 12.5px; font-weight: 500; color: #9AA6B6; }
+/* 다음 일정 카드 버튼 (최대 3개): '확인'은 황동색 · 보낸 '늦어요'는 자물쇠로 잠금 */
+.nc-acts .na.ok { background: var(--brass); border-color: var(--brass); color: var(--navy); font-weight: 800; }
+.nc-acts .na.lock { color: #9AA6B6; border-color: #3A4D69; font-size: 13.5px; gap: 4px; white-space: nowrap; }
 .drv-line .chg { font-style: normal; font-size: 11.5px; font-weight: 800; color: var(--navy); background: #F2C14E; border-radius: 6px; padding: 1px 6px; }
 
 /* AI 카드: 좋았던 식당 고르기 (흰 카드 위) */
