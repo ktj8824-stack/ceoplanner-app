@@ -30,6 +30,12 @@ const Drv = {
   },
   /** 대기 중이라고 알린 뒤 비서가 대기 장소를 바꿨는지 (출발 전만) → 그 장소 '대기'를 다시 누르게 */
   moved(s, st) { return !!(st.wait && !st.depart && st.waitAt && st.waitAt !== this.waitFull(s)); },
+  /** 비서가 픽업 장소(출발지)를 바꿨는지 — 대기를 누르기 전이어도 출발 전까지 '픽업 장소 바뀜 · 예전: 자택' */
+  changedFrom(s, st, pl, now) {
+    const pc = s.pickupChanged || (s.actual && s.actual.pickupChanged);
+    if (!pc || !pc.from || st.depart || pl.leaveAt <= now) return '';
+    return Learn.key(pc.from) !== Learn.key(this.waitFull(s)) ? pc.from : '';
+  },
 
   /** 대기 장소: 출발지 칸이 비면 그날 바로 앞 일정 장소 (없으면 본사).
       '본사 15층 대회의실'처럼 층 · 회의실까지 적혀 있어도 기사님께는 건물 이름만 ('본사') */
@@ -88,7 +94,7 @@ const Drv = {
   },
 
   card(s, pl, now) {
-    const raw = this.state(s.id), moved = this.moved(s, raw);
+    const raw = this.state(s.id), moved = this.moved(s, raw), was = this.changedFrom(s, raw, pl, now);
     const st = moved ? { ...raw, wait: null } : raw;   // 바뀐 장소에서 다시 '대기 중'을 누르게
     const nextIdx = this.STEPS.findIndex(x => !st[x.kind]);
     const trip = Backtime.isTrip(s.mode);
@@ -101,9 +107,9 @@ const Drv = {
     const next = nextIdx >= 0 && !past ? this.STEPS[nextIdx] : null;
     return `<article class="drv-card ${past ? 'past' : ''}">
       <div class="dc-top"><div class="dc-call"><small>대기 시각</small><b class="num">${U.hm(callAt)}</b></div>
-        <span class="dc-pill ${late || moved ? 'late' : soon <= 30 && soon > -30 && !st.depart ? 'soon' : ''}">${moved && !past ? '픽업 장소 바뀜' : past ? '끝남' : late ? `대기 ${U.durLabel(-soon)} 지남` : soon > 0 ? (soon < 60 ? `${soon}분 뒤` : `${U.durLabel(soon)} 뒤`) : st.depart ? '운행 중' : '대기 시간'}</span></div>
+        <span class="dc-pill ${late || moved || was ? 'late' : soon <= 30 && soon > -30 && !st.depart ? 'soon' : ''}">${(moved || was) && !past ? '픽업 장소 바뀜' : past ? '끝남' : late ? `대기 ${U.durLabel(-soon)} 지남` : soon > 0 ? (soon < 60 ? `${soon}분 뒤` : `${U.durLabel(soon)} 뒤`) : st.depart ? '운행 중' : '대기 시간'}</span></div>
       <dl class="dc-route">
-        <dt>대기 장소</dt><dd>${U.esc(this.waitPlace(s))}${this.waitFull(s) !== this.waitPlace(s) ? `<small class="dc-full">${U.esc(this.waitFull(s))}</small>` : ''}${moved ? `<small class="dc-full">픽업 장소가 바뀌었어요 · 예전 ${U.esc(U.building(raw.waitAt))}</small>` : ''}</dd>
+        <dt>대기 장소</dt><dd>${U.esc(this.waitPlace(s))}${this.waitFull(s) !== this.waitPlace(s) ? `<small class="dc-full">${U.esc(this.waitFull(s))}</small>` : ''}${moved ? `<small class="dc-full">픽업 장소가 바뀌었어요 · 예전 ${U.esc(U.building(raw.waitAt))}</small>` : was ? `<small class="dc-full">예전: ${U.esc(U.pickupLabel(was) || was)}</small>` : ''}</dd>
         <dt>출발</dt><dd class="num">${U.hm(pl.leaveAt)}</dd>
         <dt>${trip ? '역 · 공항' : '도착 목표'}</dt><dd><b>${U.esc(dest)}</b> <span class="num">${trip ? (s.trip && s.trip.departTime ? `${s.trip.departTime} 출발편` : '') : U.hm(pl.arriveBy)}</span></dd>
         <dt>일정</dt><dd>${s.start} ${U.esc(s.title)}</dd>

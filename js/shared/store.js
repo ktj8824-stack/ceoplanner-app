@@ -430,6 +430,7 @@ const Store = {
       visibility: r.visibility, trip: r.trip, briefing: r.briefing || {}, status: r.status,
       ackAt: r.ack_at, createdBy: r.created_role, masked: !!r.masked, origin: r.origin || '', nudgedAt: r.nudged_at || null,
       actual: r.actual || {}, series: r.series || null, invitedAt: this._invitedAt(r.actual),
+      pickupChanged: r.pickup_changed || (r.actual && r.actual.pickupChanged) || null,   // 기사 피드는 실제 기록 대신 이것만 내려줘요
     };
   },
 };
