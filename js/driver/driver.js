@@ -37,21 +37,16 @@ const Drv = {
     return Learn.key(pc.from) !== Learn.key(this.waitFull(s)) ? pc.from : '';
   },
 
-  /** 대기 장소: 출발지 칸이 비면 그날 바로 앞 일정 장소 (없으면 본사).
+  /** 대기 장소: 출발지 칸이 비면 그날 바로 앞 일정 장소 (그날 첫 일정 · 앞 일정 뒤 3시간 넘게 비면 자택).
       '본사 15층 대회의실'처럼 층 · 회의실까지 적혀 있어도 기사님께는 건물 이름만 ('본사') */
   waitPlace(s) { return U.building(this.waitFull(s)); },
   /** 원래 적힌 대기 장소 전체 ('S타워 B2층 주차장') — 화면에 작게 같이 보여 줘요 (층·주차장은 기사님께 필요한 정보) */
-  waitFull(s) {
-    if (s.origin) return s.origin;
-    const prev = Store.list().filter(x => x.date === s.date && x.id !== s.id && x.location && !x.masked && x.visibility !== 'private' && x.status !== 'cancelled' && (x.end || x.start) <= s.start)
-      .sort((a, b) => (a.end || a.start).localeCompare(b.end || b.start)).pop();
-    return prev ? prev.location : '본사';
-  },
+  waitFull(s) { return Backtime.defaultOrigin(Store.list(), s); },
 
   jobs(ymd) {
     const p = Store.profile();
     const list = Store.list().filter(s => s.date === ymd && s.status !== 'cancelled' && s.visibility !== 'private' && !s.masked
-      && Backtime.driverLeg(s));   // 국제선 귀국편(해외 출발 구간)은 빼고 도착 마중만
+      && Backtime.driverLeg(s));   // 도착지 마중을 켠 돌아오는 편(서울 밖 출발 구간: 김해공항 · 부산역 · 해외)은 빼고 도착 마중만
     return Backtime.planDay(list, { prepMin: p.prepMin });
   },
   /** 도착지 마중 — 기차 · 비행기 일정에 '도착지 마중'을 켜 두면 도착 + 짐 찾는 시간에 자동 배차 ('도착 20:00 → 20:40 T2 대기')
@@ -129,6 +124,8 @@ const Drv = {
     const pk = pl.pickup, st = this.state(s.id + ':pickup');
     // 마중 장소 · 길안내는 도착 공항 기준 (출발 공항 s.trip.station 이 아니라)
     const base = pk.station, where = pk.spot || base || '도착 출구';
+    // 한 줄 요약에 어느 공항 · 역인지 짧게 ('김포 국내선 1층 4번 출구 대기 · KE1124')
+    const short = String(base || '').replace(/\s*(국제공항|공항|역)$/, '').trim();
     const nav = st.depart && s.location ? s.location : (base || pk.spot || '인천공항');
     const nextIdx = this.PK_STEPS.findIndex(x => !st[x.kind]);
     const soon = U.diffMin(pk.waitAt, now);
@@ -139,7 +136,7 @@ const Drv = {
     return `<article class="drv-card pickup ${past ? 'past' : ''}">
       <div class="dc-top"><div class="dc-call"><small>마중 대기</small><b class="num">${U.hm(pk.waitAt)}</b></div>
         <span class="dc-pill ${late ? 'late' : soon <= 30 && soon > -30 && !st.depart ? 'soon' : ''}">${past ? '끝남' : st.depart ? '운행 중' : late ? `대기 ${U.durLabel(-soon)} 지남` : soon > 0 ? (soon < 60 ? `${soon}분 뒤` : `${U.durLabel(soon)} 뒤`) : '대기 시간'}</span></div>
-      <p class="dc-pk num">도착 ${U.hm(pk.arriveAt)} → ${U.hm(pk.waitAt)} ${U.esc(where)} 대기</p>
+      <p class="dc-pk num">도착 ${U.hm(pk.arriveAt)} → ${U.hm(pk.waitAt)} ${U.esc(short && !where.includes(short) ? short + ' ' : '')}${U.esc(where)} 대기${pk.flightNo ? ` · ${U.esc(pk.flightNo)}` : ''}</p>
       <dl class="dc-route">
         <dt>마중 장소</dt><dd><b>${U.esc(where)}</b>${base && pk.spot && !pk.spot.includes(base) ? `<small class="dc-full">${U.esc(base)}</small>` : ''}</dd>
         <dt>도착편</dt><dd class="num">${pk.flightNo ? `<b>${U.esc(pk.flightNo)}</b> · ` : ''}${U.hm(pk.arriveAt)} 도착 · 짐 찾기 ${pk.bagMin}분</dd>

@@ -42,12 +42,18 @@
     PICKUP_BAG_MIN: { intl: 40, flight: 20, train: 10 },
     pickupBagDefault(mode, intl) { return mode === 'flight' ? (intl ? this.PICKUP_BAG_MIN.intl : this.PICKUP_BAG_MIN.flight) : this.PICKUP_BAG_MIN.train; },
 
-    /** 해외에서 출발하는 구간인지 — 국제선(trip.intl) + 도착지 마중 = 귀국편.
-        출발 공항이 국내 공항이면(인천 → 뉴욕 등) 아니에요. 이 구간은 서울 기사님이 갈 수 없어 배차 · 기사 호출에서 빼요 */
-    KR_AIRPORT: /인천|김포|김해|제주|대구|청주|광주|무안|양양|여수|울산|포항|사천|군산|원주|ICN|GMP|PUS|CJU|TAE|CJJ/i,
+    /** 서울 기사님이 모시고 갈 수 있는 출발역 · 공항 (서울 · 수도권) */
+    SEOUL_STATION: /김포|인천|ICN|GMP|서울|용산|수서|광명|청량리|영등포|행신|상봉|고속터미널|센트럴시티/i,
+    /** 출발 구간을 기사님이 갈 수 없는지 — '도착지 마중'을 켠 기차 · 비행기(돌아오는 편)인데 출발역 · 공항이 서울 · 수도권 밖
+        (김해공항 → 김포, 부산역 → 서울역, 국제선 귀국편 모두). 이 구간은 배차 · 기사 호출 · 배차 문자에서 빼고 도착 마중만 가요.
+        김포 · 인천공항 · 서울역 · 용산 · 수서 · 광명역 등에서 출발하면 그대로 기사님이 모셔요.
+        출발역을 안 적었으면 국제선만 빼요 (국내선 · KTX는 대개 서울에서 출발) */
     departAbroad(s) {
       const t = s && s.trip;
-      return !!(s && s.mode === 'flight' && t && t.intl && t.pickup && t.pickup.on && !this.KR_AIRPORT.test(t.station || ''));
+      if (!s || !this.isTrip(s.mode) || !t || !t.pickup || !t.pickup.on) return false;
+      const st = String(t.station || '').trim();
+      if (!st) return !!(s.mode === 'flight' && t.intl);
+      return !this.SEOUL_STATION.test(st);
     },
     /** 출발 구간(→ 역 · 공항)을 기사님이 모시는지 — 기사 차량 일정 · 역까지 기사 차량 (해외 출발 구간은 빼요) */
     driverLeg(s) {
@@ -60,7 +66,7 @@
       const t = (s && s.trip) || {};
       if (String(t.arriveStation || '').trim()) return String(t.arriveStation).trim();
       if (/공항|터미널|역$|역\s/.test((s && s.location) || '')) return s.location;
-      return this.departAbroad(s) ? '인천공항' : '';
+      return this.departAbroad(s) && t.intl ? '인천공항' : '';
     },
 
     /** 마중만 하는 일정인지: 제목에 '픽업 · 마중', 도착지가 공항 · 역, 출발지가 본사(비어 있으면 본사)
@@ -214,6 +220,25 @@
       const list = live.filter(s => s.date === ymd);
       if (prev && prev.p.freeAt > U.addMin(U.at(ymd, '00:00'), -4 * 60)) list.push(prev.s);   // 전날 20시 이후에 끝나는 일정만
       return this.conflicts(list, opts).filter(w => w.b.date === ymd);
+    },
+
+    /** 출발지(기사님 대기 장소) 기본값 — 출발지 칸 → 그날 바로 앞 일정 장소.
+     *  그날 첫 일정(앞 일정이 없거나, 앞 일정이 끝나고 3시간 넘게 비면)이면 자택 (내 정보의 집 주소가 있으면 그 주소).
+     *  대표 개인 일정 · 가린 일정 · 취소된 일정은 '앞 일정'으로 치지 않아요.
+     *  비서 등록 창 · 기사님 배차표 · 대표 앱 · AI 비서가 모두 이 규칙을 써요 */
+    HOME: '자택',
+    prevOf(list, s) {
+      return (list || []).filter(x => x && x.date === s.date && x.id !== s.id && x.location && !x.masked && x.visibility !== 'private' && x.status !== 'cancelled'
+        && (x.end || x.start) <= s.start && x.start <= s.start)
+        .sort((a, b) => (a.end || a.start).localeCompare(b.end || b.start)).pop() || null;
+    },
+    defaultOrigin(list, s, home) {
+      if (!s) return '';
+      if (s.origin) return s.origin;
+      const prev = this.prevOf(list, s);
+      const m = t => { const [h, mi] = String(t || '0:0').split(':').map(Number); return h * 60 + (mi || 0); };
+      if (!prev || m(s.start) - m(prev.end || prev.start) > 180) return String(home || '').trim() || this.HOME;
+      return prev.location;
     },
 
     /** 늦을 때 도착 예상 — 시작 시각 + 늦는 분 ('10분 늦어요' → 11:00 미팅이면 11:10쯤 도착).

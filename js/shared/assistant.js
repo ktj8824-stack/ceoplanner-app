@@ -72,12 +72,12 @@
       return { ymd, err: '' };
     },
 
-    /** 그날 이 시각 전에 끝나는 마지막 일정 장소 (없으면 본사) — 기사님 대기 장소 */
+    /** 그날 이 시각 전에 끝나는 마지막 일정 장소 (그날 첫 일정이면 '' → 자택) — 기사님 대기 장소 */
     originBefore(list, date, start) {
       // 대표 개인 일정 장소는 출발지로 쓰지 않아요 (비서 · 기사님께 보이게 돼요)
-      const prev = list.filter(x => x.date === date && x.location && !x.masked && !this.isPrivate(x) && x.status !== 'cancelled' && (x.end || x.start) <= start && x.start <= start)
-        .sort((a, b) => (a.end || a.start).localeCompare(b.end || b.start)).pop();
-      return prev ? prev.location : '';
+      // 그날 첫 일정(앞 일정이 없거나 3시간 넘게 비면)은 비워 둬요 → 화면 · 배차표에서 '자택' (Backtime.defaultOrigin)
+      const o = Backtime.defaultOrigin(list, { date, start, id: '' });
+      return o === Backtime.HOME ? '' : o;
     },
 
     /** 비서에게 알릴 필요가 없는 일정 (대표 개인 일정) */
