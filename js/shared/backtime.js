@@ -42,6 +42,27 @@
     PICKUP_BAG_MIN: { intl: 40, flight: 20, train: 10 },
     pickupBagDefault(mode, intl) { return mode === 'flight' ? (intl ? this.PICKUP_BAG_MIN.intl : this.PICKUP_BAG_MIN.flight) : this.PICKUP_BAG_MIN.train; },
 
+    /** 해외에서 출발하는 구간인지 — 국제선(trip.intl) + 도착지 마중 = 귀국편.
+        출발 공항이 국내 공항이면(인천 → 뉴욕 등) 아니에요. 이 구간은 서울 기사님이 갈 수 없어 배차 · 기사 호출에서 빼요 */
+    KR_AIRPORT: /인천|김포|김해|제주|대구|청주|광주|무안|양양|여수|울산|포항|사천|군산|원주|ICN|GMP|PUS|CJU|TAE|CJJ/i,
+    departAbroad(s) {
+      const t = s && s.trip;
+      return !!(s && s.mode === 'flight' && t && t.intl && t.pickup && t.pickup.on && !this.KR_AIRPORT.test(t.station || ''));
+    },
+    /** 출발 구간(→ 역 · 공항)을 기사님이 모시는지 — 기사 차량 일정 · 역까지 기사 차량 (해외 출발 구간은 빼요) */
+    driverLeg(s) {
+      if (!s) return false;
+      if (s.mode === 'driver') return true;
+      return !!(this.isTrip(s.mode) && s.trip && s.trip.accessMode === 'driver' && !this.departAbroad(s));
+    },
+    /** 도착 공항 · 역 — 직접 적은 '도착 공항', 없으면 장소가 공항 · 역일 때 장소, 국제선 귀국편이면 인천공항 */
+    arriveStation(s) {
+      const t = (s && s.trip) || {};
+      if (String(t.arriveStation || '').trim()) return String(t.arriveStation).trim();
+      if (/공항|터미널|역$|역\s/.test((s && s.location) || '')) return s.location;
+      return this.departAbroad(s) ? '인천공항' : '';
+    },
+
     /** 마중만 하는 일정인지: 제목에 '픽업 · 마중', 도착지가 공항 · 역, 출발지가 본사(비어 있으면 본사)
         → 대표님이 움직이는 일정이 아니라 기사님 심부름이라 기상 · 기사 호출 · 이동 부족 경고를 붙이지 않아요 */
     isPickupOnly(s) {
@@ -53,7 +74,7 @@
     /**
      * 일정 하나의 역산 결과.
      * s: { date, start, end, mode, travelMin, bufferMin, category, location, trip? }
-     *    trip: { departTime, arriveTime, accessMin, station, intl }  (기차·비행기일 때)
+     *    trip: { departTime, arriveTime, accessMin, station, intl, arriveStation?, flightNo?, pickup? }  (기차·비행기일 때 · station 은 출발역 · 공항)
      * opts: { prepMin, firstOfDay }  — 그날 첫 이동 일정이면 기상 시각도 계산
      * 반환: { arriveBy, leaveAt, driverCallAt, wakeAt, startAt, endAt, items[] }
      */
@@ -68,7 +89,7 @@
       const arriveBy = U.addMin(startAt, -cat.arriveEarlyMin);
       const items = [];
       const pickupOnly = this.isPickupOnly(s);
-      let leaveAt, warn = '', pickup = null;
+      let leaveAt, warn = '', pickup = null, freeAt = null, lateMin = 0;
 
       if (mode === 'none') {
         leaveAt = arriveBy;
@@ -82,22 +103,24 @@
         leaveAt = U.addMin(stationAt, -(accessMin + buffer));
         items.push({ at: leaveAt, kind: 'leave', icon: '🚪', title: `${t.station || '역·공항'}으로 출발`, detail: `${U.durLabel(accessMin)} 이동 + 여유 ${buffer}분` });
         items.push({ at: stationAt, kind: 'wait', icon: '⏱️', title: marginLabel, detail: `${margin}분 전 도착` });
-        items.push({ at: departAt, kind: 'move', icon: def.emoji, title: `${def.label} 출발`, detail: t.departTime || '' });
+        items.push({ at: departAt, kind: 'move', icon: def.emoji, title: `${def.label} 출발`, detail: [t.flightNo, t.departTime].filter(Boolean).join(' · ') });
         if (t.arriveTime) {
           let tripArr = U.at(s.date, t.arriveTime);
           if (tripArr < departAt) tripArr = U.addMin(tripArr, 24 * 60);   // 국제선 다음 날 도착
-          items.push({ at: tripArr, kind: 'move', icon: '📍', title: '도착역·공항 도착', detail: s.travelMin ? `현장까지 ${U.durLabel(s.travelMin)}` : '' });
+          items.push({ at: tripArr, kind: 'move', icon: '📍', title: `${this.arriveStation(s) || '도착역·공항'} 도착`, detail: s.travelMin ? `현장까지 ${U.durLabel(s.travelMin)}` : '' });
           // 도착지 마중: 도착 + 짐 찾는 시간에 기사님이 마중 장소에서 대기
           let ready = tripArr;
           if (t.pickup && t.pickup.on) {
             const bagMin = Number(t.pickup.bagMin ?? this.pickupBagDefault(mode, t.intl));
             const spot = String(t.pickup.spot || '').trim();
             ready = U.addMin(tripArr, bagMin);
-            pickup = { arriveAt: tripArr, waitAt: ready, bagMin, spot };
+            pickup = { arriveAt: tripArr, waitAt: ready, bagMin, spot, station: this.arriveStation(s), flightNo: String(t.flightNo || '').trim() };
             items.push({ at: ready, kind: 'pickup', icon: '🚘', title: `기사님 마중 대기${spot ? ` · ${spot}` : ''}`, detail: `도착 ${U.hm(tripArr)} + 짐 찾기 ${bagMin}분` });
           }
           const reach = U.addMin(ready, Number(s.travelMin || 0));
+          if (reach > endAt) freeAt = reach;   // 도착이 늦어지면 다음 일정은 그 뒤에야 (겹침 경고)
           const late = U.diffMin(reach, arriveBy);
+          lateMin = Math.max(0, late);
           if (late > 0) warn = `도착 후 현장까지 가면 ${U.hm(reach)}이라, 시작 전 도착 시각(${U.hm(arriveBy)})보다 ${late}분 늦어요`;
         }
       } else {
@@ -108,7 +131,7 @@
       }
 
       let driverCallAt = null;
-      if (!pickupOnly && (mode === 'driver' || (def.trip && s.trip && s.trip.accessMode === 'driver'))) {
+      if (!pickupOnly && this.driverLeg(s)) {   // 해외 출발 구간(귀국편)은 기사 호출 없음
         driverCallAt = U.addMin(leaveAt, -this.MODES.driver.pickupMin);
         items.unshift({ at: driverCallAt, kind: 'driver', icon: '📞', title: '기사님 대기 요청', detail: `출발 ${this.MODES.driver.pickupMin}분 전 차량 대기` });
       }
@@ -136,7 +159,7 @@
       if (s.end && s.end !== s.start) items.push({ at: endAt, kind: 'end', icon: '✅', title: '종료', detail: '' });
 
       items.sort((a, b) => a.at - b.at);
-      return { arriveBy, leaveAt, driverCallAt, wakeAt, startAt, endAt, items, warn, pickup, pickupOnly };
+      return { arriveBy, leaveAt, driverCallAt, wakeAt, startAt, endAt, items, warn, pickup, pickupOnly, freeAt: freeAt || endAt, lateMin, departAbroad: this.departAbroad(s) };
     },
 
     /** 하루 일정 전체 역산 — 기상은 그날 첫 일정에만 붙여요.
@@ -168,10 +191,10 @@
         const prev = day[i - 1], cur = day[i];
         // 사내·개인(이동 없음) 일정은 실제로 시간이 겹칠 때만 경고 (연달아 있는 건 정상)
         const short = cur.s.mode && cur.s.mode !== 'none'
-          ? U.diffMin(prev.p.endAt, cur.p.leaveAt)
-          : U.diffMin(prev.p.endAt, cur.p.startAt);
+          ? U.diffMin(prev.p.freeAt, cur.p.leaveAt)
+          : U.diffMin(prev.p.freeAt, cur.p.startAt);
         if (short > 0) {
-          const overlap = cur.p.startAt < prev.p.endAt;
+          const overlap = cur.p.startAt < prev.p.freeAt;
           const a = `'${prev.s.title}'`;
           out.push({
             a: prev.s, b: cur.s, shortMin: short,
@@ -187,9 +210,9 @@
     /** 그날 경고 + 전날 밤 일정이 이어지는 경우까지 (전날 마지막 일정과 비교) */
     conflictsOn(all, ymd, opts = {}) {
       const live = all.filter(s => s.status !== 'cancelled');
-      const prev = live.filter(s => s.date === U.addDays(ymd, -1)).map(s => ({ s, p: this.plan(s, opts) })).sort((a, b) => b.p.endAt - a.p.endAt)[0];
+      const prev = live.filter(s => s.date === U.addDays(ymd, -1)).map(s => ({ s, p: this.plan(s, opts) })).sort((a, b) => b.p.freeAt - a.p.freeAt)[0];
       const list = live.filter(s => s.date === ymd);
-      if (prev && prev.p.endAt > U.addMin(U.at(ymd, '00:00'), -4 * 60)) list.push(prev.s);   // 전날 20시 이후에 끝나는 일정만
+      if (prev && prev.p.freeAt > U.addMin(U.at(ymd, '00:00'), -4 * 60)) list.push(prev.s);   // 전날 20시 이후에 끝나는 일정만
       return this.conflicts(list, opts).filter(w => w.b.date === ymd);
     },
 

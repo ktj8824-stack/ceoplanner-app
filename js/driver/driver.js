@@ -45,7 +45,7 @@ const Drv = {
   jobs(ymd) {
     const p = Store.profile();
     const list = Store.list().filter(s => s.date === ymd && s.status !== 'cancelled' && s.visibility !== 'private' && !s.masked
-      && (s.mode === 'driver' || (s.trip && s.trip.accessMode === 'driver')));
+      && Backtime.driverLeg(s));   // 국제선 귀국편(해외 출발 구간)은 빼고 도착 마중만
     return Backtime.planDay(list, { prepMin: p.prepMin });
   },
   /** 도착지 마중 — 기차 · 비행기 일정에 '도착지 마중'을 켜 두면 도착 + 짐 찾는 시간에 자동 배차 ('도착 20:00 → 20:40 T2 대기')
@@ -61,7 +61,7 @@ const Drv = {
   /** 취소된 기사 차량 일정 — 지우지 않고 '취소됨' 한 줄로 (헛걸음하지 않게) */
   cancelled(ymd) {
     return Store.list().filter(s => s.date === ymd && s.status === 'cancelled' && s.visibility !== 'private' && !s.masked
-      && (s.mode === 'driver' || (s.trip && s.trip.accessMode === 'driver'))).sort((a, b) => a.start.localeCompare(b.start));
+      && Backtime.driverLeg(s)).sort((a, b) => a.start.localeCompare(b.start));
   },
 
   render() {
@@ -121,7 +121,9 @@ const Drv = {
   ],
   pickupCard(s, pl, now) {
     const pk = pl.pickup, st = this.state(s.id + ':pickup');
-    const where = pk.spot || (s.trip && s.trip.station) || '도착 출구';
+    // 마중 장소 · 길안내는 도착 공항 기준 (출발 공항 s.trip.station 이 아니라)
+    const base = pk.station, where = pk.spot || base || '도착 출구';
+    const nav = st.depart && s.location ? s.location : (base || pk.spot || '인천공항');
     const nextIdx = this.PK_STEPS.findIndex(x => !st[x.kind]);
     const soon = U.diffMin(pk.waitAt, now);
     const past = U.addMin(pk.waitAt, 90) < now && !st.wait;
@@ -133,19 +135,19 @@ const Drv = {
         <span class="dc-pill ${late ? 'late' : soon <= 30 && soon > -30 && !st.depart ? 'soon' : ''}">${past ? '끝남' : st.depart ? '운행 중' : late ? `대기 ${U.durLabel(-soon)} 지남` : soon > 0 ? (soon < 60 ? `${soon}분 뒤` : `${U.durLabel(soon)} 뒤`) : '대기 시간'}</span></div>
       <p class="dc-pk num">도착 ${U.hm(pk.arriveAt)} → ${U.hm(pk.waitAt)} ${U.esc(where)} 대기</p>
       <dl class="dc-route">
-        <dt>마중 장소</dt><dd><b>${U.esc(where)}</b>${s.trip && s.trip.station && pk.spot ? `<small class="dc-full">${U.esc(s.trip.station)}</small>` : ''}</dd>
-        <dt>도착편</dt><dd class="num">${U.hm(pk.arriveAt)} 도착 · 짐 찾기 ${pk.bagMin}분</dd>
+        <dt>마중 장소</dt><dd><b>${U.esc(where)}</b>${base && pk.spot && !pk.spot.includes(base) ? `<small class="dc-full">${U.esc(base)}</small>` : ''}</dd>
+        <dt>도착편</dt><dd class="num">${pk.flightNo ? `<b>${U.esc(pk.flightNo)}</b> · ` : ''}${U.hm(pk.arriveAt)} 도착 · 짐 찾기 ${pk.bagMin}분</dd>
         <dt>일정</dt><dd>${U.esc(s.title)}${s.location ? ` → ${U.esc(s.location)}` : ''}</dd>
       </dl>
       <ol class="dc-steps">${timeline}</ol>
       <div class="dc-acts">${next ? `<button class="btn primary big" data-pkstep="${next.kind}" data-id="${s.id}">${next.btn}</button>` : `<p class="dc-done">${past ? '' : Icon.svg('checkCircle', 18) + ' 대표님 탑승을 알렸어요'}</p>`}
-        <a class="btn" href="${U.tmapLink(st.depart && s.location ? s.location : (s.trip && s.trip.station) || where)}">${Icon.svg('nav', 16)} 길안내</a></div>
+        <a class="btn" href="${U.tmapLink(nav)}">${Icon.svg('nav', 16)} 길안내</a></div>
     </article>`;
   },
   async pickupStep(id, kind) {
     const s = Store.get(id); if (!s) return;
     const name = Store.profile().driverName || '기사';
-    const where = (s.trip && s.trip.pickup && s.trip.pickup.spot) || (s.trip && s.trip.station) || '도착 출구';
+    const where = (s.trip && s.trip.pickup && s.trip.pickup.spot) || Backtime.arriveStation(s) || '도착 출구';
     const body = { wait: `${name}님: ${where}에서 마중 대기하고 있어요 · '${s.title}'`, depart: `${name}님: 대표님 마중 탑승, 출발했어요 · '${s.title}'` }[kind];
     try {
       // ref 를 따로 둬서 출발 쪽 대기 · 출발 기록(이동 시간 학습)과 섞이지 않게
