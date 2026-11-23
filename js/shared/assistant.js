@@ -215,14 +215,16 @@
       const n = this.minutes(t) || 10;
       const reason = /막혀|막힘|교통|차가/.test(t) ? '교통 체증으로 ' : '';
       const who = (s.briefing && s.briefing.who) ? `${s.briefing.who}님, ` : '';
-      const arriveBy = U.addMin(U.at(s.date, s.start), -((Backtime.CATEGORIES[s.category] || {}).arriveEarlyMin || 0));
+      // 도착 예상 = 시작 + 늦는 분 (대표 앱 '10분 늦어요' · 비서 문자 초안과 같은 규칙 · Backtime.lateArrive)
+      const at = U.hm(Backtime.lateArrive(s, n));
       return {
         kind: 'action',
         say: `'${s.title}'에 ${n}분 늦는다고 비서에게 알릴게요.`,
-        lines: [`${s.title} · ${s.start} 시작`, `도착 예상 ${U.hm(U.addMin(arriveBy, n))} (원래 ${U.hm(arriveBy)})`, `비서에게 알림 + 상대방에게 보낼 문자 초안`],
+        lines: [`${s.title} · ${s.start} 시작`, `도착 예상 ${at}쯤 (${n}분 늦음)`, `비서에게 알림 + 상대방에게 보낼 문자 초안`],
         changes: [],
-        notify: { body: `${reason}'${s.title}'에 ${n}분 정도 늦을 것 같아요. 상대방께 전달 부탁해요.`, ref: s.id },
-        draft: `${who}${reason}${n}분 정도 늦을 것 같습니다. 죄송합니다. 최대한 빨리 가겠습니다.`,
+        notify: { body: `${reason}'${s.title}'에 ${n}분 정도 늦을 것 같아요 — ${at}쯤 도착해요. 상대방께 전달 부탁해요.`, ref: s.id },
+        late: { id: s.id, min: n },
+        draft: `${who}${reason}${n}분 정도 늦을 것 같습니다. ${at}쯤 도착할 예정입니다. 죄송합니다. 최대한 빨리 가겠습니다.`,
       };
     },
 

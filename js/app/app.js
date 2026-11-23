@@ -116,9 +116,31 @@ const App = {
   /** 이 일정에 대해 대표가 이미 보낸 요청이 있는지 (조정 요청 등) */
   sentAbout(id, word) { return Store.messages().some(m => m.from === 'ceo' && m.ref === id && m.body.includes(word)); },
 
+  /** 대기 · 출발 장소: 출발지 칸 → 그날 바로 앞 일정 장소 → 본사 (기사님 배차표와 같은 규칙) */
+  originOf(s) {
+    if (s.origin) return s.origin;
+    const prev = Store.list().filter(x => x.date === s.date && x.id !== s.id && x.location && x.visibility !== 'private' && x.status !== 'cancelled' && (x.end || x.start) <= s.start)
+      .sort((a, b) => (a.end || a.start).localeCompare(b.end || b.start)).pop();
+    return prev ? prev.location : '본사';
+  },
+  /** '늦어요'를 보낸 뒤 이 일정에 늦음 기록 (같은 길 · 같은 시간대에 쌓이면 비서 등록 창에서 '출발 당기기'를 권해요) */
+  async recordLate(id, min) {
+    const s = Store.get(id); if (!s || s.visibility === 'private' || !s.location) return;
+    try { await Store.setActual(id, { late: Learn.lateRecord(s, min, this.originOf(s)) }); } catch { /* 기록은 못 해도 알림은 갔어요 */ }
+  },
+
   // ───────── 홈 ─────────
   home() {
     return this.hero() + `<div class="body">${this.briefCard()}${this.rateCard()}${window.AutoNav && AutoNav.promoHtml ? AutoNav.promoHtml() : ''}${this.view === 'timeline' ? this.dayList() : this.calendar()}</div>`;
+  },
+
+  /** 기사 차량 일정: '픽업 삼성동 코엑스 3번 출구 · 08:30' (비서가 최근 바꿨으면 '바뀜') — 출발 전까지만 */
+  pickupLine(s, pl, now) {
+    if (s.visibility === 'private' || !Backtime.driverLeg(s) || pl.pickupOnly || pl.departAbroad || !pl.driverCallAt || this.departedAt(s.id) || pl.leaveAt <= now) return '';
+    const pc = s.actual && s.actual.pickupChanged;
+    const place = this.originOf(s);
+    const changed = pc && Learn.key(pc.from) !== Learn.key(place) && U.diffMin(now, new Date(pc.at)) < 24 * 60;
+    return `<p class="drv-line pickup">${Icon.svg('car', 15)} 픽업 ${U.esc(U.pickupLabel(place) || place)} · <b class="num">${U.hm(pl.driverCallAt)}</b>${changed ? `<em class="chg">바뀜</em><small>예전: ${U.esc(U.pickupLabel(pc.from) || pc.from)}</small>` : ''}</p>`;
   },
 
   /** 기사님 최근 상태 한 줄 (대기 중 · 출발 · 현장 도착) + 출발했으면 도착 예상 · 늦을 것 같으면 경고 */
@@ -225,14 +247,16 @@ const App = {
     const canArrive = !overdue && departed && !act.arriveAt && s.mode !== 'none' && !mode.trip && pl.startAt > now;
     if (overdue) acts.unshift(`<button class="na light" data-departed="${s.id}">${Icon.svg('check', 16)} 출발했어요</button>`);
     else if (canArrive) acts.unshift(`<button class="na light" data-arrived="${s.id}">${Icon.svg('check', 16)} 도착했어요</button>`);
-    if (!priv) acts.push(`<button class="na" data-late="${s.id}">10분 늦어요</button>`);
+    // 이미 '늦어요'를 보냈으면 같은 알림이 두 번 가지 않게 버튼을 잠가요
+    const lateSent = !priv ? Learn.lateNotice(s, Store.messages()) : null;
+    if (!priv) acts.push(lateSent ? `<button class="na sent" data-late="${s.id}" disabled>늦는다고 알림 · ${U.hm(lateSent.at)}</button>` : `<button class="na" data-late="${s.id}">10분 늦어요</button>`);
     if (!overdue && !canArrive && s.mode === 'driver' && p.driverPhone && s.briefing && s.briefing.who) acts.push(`<button class="na" data-brief="${s.id}">${Icon.svg('file', 16)} 브리핑</button>`);
     const ack = !priv && !s.ackAt ? `<button class="next-ack" data-ack="${s.id}">${Icon.svg('check', 16)} 이 일정 확인했어요</button>` : '';
     return `<header class="hero">${top}
       <div class="next-card">
         <div class="nc-head"><div><small>${headLabel} ${s.start}</small><b>${priv ? Icon.svg('lock', 16) + ' ' : ''}${U.esc(s.title)}</b>${sub ? `<span>${sub}</span>` : ''}</div>
           <span class="pill ${overdue ? 'late' : ''}">${pill}</span></div>
-        ${stepHtml}${this.driverLine(s)}${pl.pickup ? `<p class="drv-line pickup">${Icon.svg('car', 15)} 도착하면 기사님이 ${U.esc([pl.pickup.station, pl.pickup.spot].filter(Boolean).join(' ') || '도착 출구')}에서 대기 · <b class="num">${U.hm(pl.pickup.waitAt)}</b><small>도착 ${U.hm(pl.pickup.arriveAt)} + 짐 ${pl.pickup.bagMin}분</small></p>` : ''}
+        ${stepHtml}${this.pickupLine(s, pl, now)}${lateSent ? `<p class="drv-line late-sent">${Icon.svg('check', 15)} 비서에게 ${lateSent.min}분 늦음 알림 · <b class="num">${U.hm(lateSent.arriveAt)}쯤 도착</b><small>${U.hm(lateSent.at)} 보냄</small></p>` : ''}${this.driverLine(s)}${pl.pickup ? `<p class="drv-line pickup">${Icon.svg('car', 15)} 도착하면 기사님이 ${U.esc([pl.pickup.station, pl.pickup.spot].filter(Boolean).join(' ') || '도착 출구')}에서 대기 · <b class="num">${U.hm(pl.pickup.waitAt)}</b><small>도착 ${U.hm(pl.pickup.arriveAt)} + 짐 ${pl.pickup.bagMin}분</small></p>` : ''}
         <div class="nc-acts n${acts.length}">${acts.join('')}</div>${ack}
       </div></header>`;
   },
@@ -569,6 +593,7 @@ const App = {
         try {
           for (const c of r.changes) await Store.upsert(c.schedule);
           if (r.notify) await Store.send(r.notify.body, { ref: r.notify.ref });
+          if (r.late) await this.recordLate(r.late.id, r.late.min);
           card.querySelector('.ai-do').innerHTML = `<span class="ok">${Icon.svg('check', 15)} ${r.changes.length ? '바꿨어요' : ''}${r.notify ? (r.changes.length ? '. ' : '') + '비서에게 알렸어요' : ''}</span>`;
           if (r.draft) {
             const d = add('v-card draft', `<span class="k">상대방에게 보낼 문자 초안</span><p>${U.esc(r.draft)}</p><button class="btn" data-copy>복사</button>`);
@@ -679,12 +704,22 @@ const App = {
     on('[data-latenote]', safe(async el => {
       const s = Store.get(el.dataset.latenote); if (!s) return;
       const e = Learn.eta(s, Store.messages(), Store.list());
-      await Store.send(`'${s.title}'에 약 ${el.dataset.min}분 늦을 것 같아요 (출발 ${e ? U.hm(e.depart) : ''} · 도착 예상 ${e ? U.hm(e.at) : ''}). 상대방께 전달 부탁해요.`, { ref: s.id });
+      // 도착 시각은 '시작 + 늦는 분' (출발 기록 + 이동 시간으로 낸 도착 예상과 같은 값) — 비서 문자 초안 · AI 비서와 같은 규칙
+      await Store.send(`'${s.title}'에 약 ${el.dataset.min}분 늦을 것 같아요 — ${U.hm(Backtime.lateArrive(s, el.dataset.min))}쯤 도착해요${e ? ` (출발 ${U.hm(e.depart)})` : ''}. 상대방께 전달 부탁해요.`, { ref: s.id });
+      await this.recordLate(s.id, el.dataset.min);
       U.toast('비서에게 알렸어요. 상대방 연락은 비서가 해요');
     }));
     on('[data-ack]', safe(async el => { await Store.ack(el.dataset.ack); U.toast('확인했어요. 비서에게 전달됐어요'); }));
     on('[data-brief]', el => this.briefing(el.dataset.brief));
-    on('[data-late]', safe(async el => { const s = Store.get(el.dataset.late); await Store.send(`'${s.title}' 10분 정도 늦을 것 같아요.`, { ref: s.id }); U.toast('비서에게 보냈어요'); }));
+    on('[data-late]', safe(async el => {
+      const s = Store.get(el.dataset.late); if (!s) return;
+      if (el.disabled || Learn.lateNotice(s, Store.messages())) { U.toast('이미 비서에게 알렸어요'); return; }   // 두 번 눌러도 한 번만
+      el.disabled = true;
+      try { await Store.send(`'${s.title}' 10분 정도 늦을 것 같아요 — ${U.hm(Backtime.lateArrive(s, 10))}쯤 도착해요.`, { ref: s.id }); }
+      catch (err) { el.disabled = false; throw err; }
+      await this.recordLate(s.id, 10);
+      U.toast('비서에게 보냈어요');
+    }));
     on('[data-postpone]', safe(async el => { const s = Store.get(el.dataset.postpone); await Store.send(`'${s.title}' (${this.dateTitle(s.date)} ${s.start}) 일정 미뤄 주세요.`, { ref: s.id }); U.toast('비서에게 요청했어요'); }));
     on('[data-adjust]', safe(async el => {
       const b = Store.get(el.dataset.adjust), a = Store.get(el.dataset.prev);

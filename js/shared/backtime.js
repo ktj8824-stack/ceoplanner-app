@@ -216,6 +216,10 @@
       return this.conflicts(list, opts).filter(w => w.b.date === ymd);
     },
 
+    /** 늦을 때 도착 예상 — 시작 시각 + 늦는 분 ('10분 늦어요' → 11:00 미팅이면 11:10쯤 도착).
+     *  대표 앱 '10분 늦어요' · 비서에게 알리기 · AI 비서 '15분 늦어' · 상대방 문자 초안이 모두 이 규칙을 써요 */
+    lateArrive(s, min) { return U.addMin(U.at(s.date, s.start), Math.max(0, Number(min) || 0)); },
+
     /** 받침에 맞는 '와/과' */
     wa(w) { const c = String(w).trim().slice(-1).charCodeAt(0); return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 !== 0 ? '과' : '와'; },
   };

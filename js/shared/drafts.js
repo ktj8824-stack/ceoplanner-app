@@ -5,6 +5,7 @@
    ========================================= */
 (function (root) {
   const U = root.U || require('./utils.js');
+  const B = () => root.Backtime || require('./backtime.js');
   const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 
   const Drafts = {
@@ -35,8 +36,10 @@
 
     /** 이동 중 늦을 때 (기사님 출발 기록 · 도착 예상으로) */
     late(s, min, profile) {
+      // 도착 시각은 대표 앱 · AI 비서와 같은 규칙 (시작 + 늦는 분 → '11:10쯤')
+      const when = s.date && s.start ? `약 ${min}분 늦은 ${U.hm(B().lateArrive(s, min))}쯤` : `약 ${min}분 늦게`;
       return `${this.hello(s.briefing)} ${this.me(profile)}\n` +
-        `대표님께서 지금 이동 중이신데, 약 ${min}분 늦게 도착하실 것 같습니다.\n` +
+        `대표님께서 지금 이동 중이신데, ${when} 도착하실 것 같습니다.\n` +
         `기다리시게 해서 죄송합니다. 도착하시는 대로 바로 시작하겠습니다.`;
     },
 

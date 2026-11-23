@@ -9,6 +9,7 @@
    - places(list, { who, company }): 대표님이 '좋았어요'라고 한 식사 장소 추천
    - placeNote(list, location): 이 장소에 대한 대표님 지난 평가
    - repeatDates(date, kind, count): 반복 일정 날짜들
+   - lateNotice / lateRecord / lateHabit: 대표님 '늦어요' 알림 · 늦음 기록 · 같은 길 자주 늦으면 출발 당기기 권함
    ========================================= */
 (function (root) {
   const U = root.U || require('./utils.js');
@@ -120,6 +121,44 @@
       if (!min) return null;
       const at = U.addMin(dep, min);
       return { at, depart: dep, min, late: U.diffMin(at, U.at(s.date, s.start)), learned: !!t, slotLabel: t ? t.slotLabel : '' };
+    },
+
+    /** 대표님이 '늦을 것 같아요'를 보낸 기록 (가장 최근) — { min, at, arriveAt } 또는 null.
+     *  withinMin 을 주면 그 시간 안에 보낸 것만 (비서 웹 빨간 띠는 60분) */
+    lateNotice(s, messages = [], now = new Date(), withinMin = 0) {
+      if (!s) return null;
+      let hit = null;
+      for (const m of messages) {
+        if (m.from !== 'ceo' || m.ref !== s.id || !/늦을 것 같아요/.test(m.body)) continue;
+        const at = new Date(m.at);
+        if (withinMin && (U.diffMin(now, at) > withinMin || at > U.addMin(now, 1))) continue;
+        if (!hit || at > hit.at) { const n = String(m.body).match(/(\d+)\s*분\s*(?:정도\s*)?늦을/); hit = { min: n ? Number(n[1]) : 10, at }; }
+      }
+      if (!hit) return null;
+      const B = root.Backtime || require('./backtime.js');
+      return { ...hit, arriveAt: B.lateArrive(s, hit.min) };
+    },
+
+    /** 늦음 기록 한 건 — 일정의 actual.late 에 저장해 두고 쌓이면 '출발 당기기'를 권해요 */
+    lateRecord(s, lateMin, from, at = new Date()) {
+      const d = U.at(s.date, s.start);
+      return { scheduleId: s.id, from: from || s.origin || '', to: s.location || '', weekday: d.getDay(), hour: d.getHours(), lateMin: Math.max(0, Math.round(Number(lateMin) || 0)), at: new Date(at).toISOString() };
+    },
+    /** 저장된 늦음 기록 모음 (일정마다 한 건) */
+    lateRecords(list = []) {
+      return list.filter(s => s && s.status !== 'cancelled' && s.actual && s.actual.late && s.actual.late.lateMin > 0).map(s => ({ ...s.actual.late, scheduleId: s.id }));
+    },
+    /** 같은 길(출발지 → 장소) · 같은 시간대에 2번 이상 늦었으면 { n, avg, pullMin } — 출발을 그만큼 당기자고 권해요 */
+    LATE_MIN_SAMPLES: 2,
+    lateHabit(list, { origin, location, date, start, exceptId } = {}) {
+      const o = this.key(origin), l = this.key(location);
+      if (!o || !l || !date || !start) return null;
+      const band = this.slot(U.at(date, start)).key;
+      const recs = this.lateRecords(list).filter(r => r.scheduleId !== exceptId && this.key(r.from) === o && this.key(r.to) === l
+        && this.slot(new Date(2000, 0, 1, r.hour)).key === band).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 5);
+      if (recs.length < this.LATE_MIN_SAMPLES) return null;
+      const avg = Math.round(recs.reduce((a, r) => a + r.lateMin, 0) / recs.length);
+      return { n: recs.length, avg, pullMin: Math.max(5, Math.round(avg / 5) * 5), slotLabel: this.slot(U.at(date, start)).label };
     },
 
     /** 식사 장소별 대표님 평가 모음 */
