@@ -127,6 +127,7 @@ const Store = {
   async upsert(s) {
     if (!s.id) s.id = U.uid();
     if (!s.createdBy) s.createdBy = this.role;
+    this._stampCreated(s);
     // 비서가 수정하면 CEO 확인을 다시 받음
     if (this.role === 'secretary') s.ackAt = null;
     if (this.mode === 'supabase') {
@@ -139,6 +140,15 @@ const Store = {
       this._saveDemo();
     }
     return s;
+  },
+
+  /** 처음 만든 시각 (대표 앱 '비서가 방금 추가 · 13:10'). 서버는 created_at 기본값이 넣고, 데모는 여기서 찍어요.
+   *  이미 있는 일정을 고칠 때는 그대로 둬요 */
+  _stampCreated(s) {
+    if (s.createdAt) return;
+    const old = this.data.schedules.find(x => x.id === s.id);
+    if (old) { if (old.createdAt) s.createdAt = old.createdAt; return; }
+    s.createdAt = new Date().toISOString();
   },
 
   async remove(id) {
@@ -155,7 +165,7 @@ const Store = {
   /** 여러 일정을 한 번에 저장 (반복 일정 등록 · 이후 반복 일정 함께 바꾸기) */
   async upsertMany(list) {
     if (!list.length) return [];
-    for (const s of list) { if (!s.id) s.id = U.uid(); if (!s.createdBy) s.createdBy = this.role; if (this.role === 'secretary') s.ackAt = null; }
+    for (const s of list) { if (!s.id) s.id = U.uid(); if (!s.createdBy) s.createdBy = this.role; this._stampCreated(s); if (this.role === 'secretary') s.ackAt = null; }
     if (this.mode === 'supabase') {
       const { error } = await this.client.from('ceo_schedules').upsert(list.map(s => this._toRow(s)));
       if (error) throw error;
@@ -422,13 +432,14 @@ const Store = {
       origin: s.origin || null, nudged_at: s.nudgedAt || null, actual: s.actual || {}, series: s.series || null,
     };
   },
+  // createdAt: ceo_schedule_feed 의 created_at (2026-11-25 보기에 추가 · 적용 전에는 null → 대표 앱 '방금 추가' 한 줄 안 보임)
   _fromRow(r) {
     return {
       id: r.id, title: r.title, category: r.category, date: r.date,
       start: String(r.start_time).slice(0, 5), end: String(r.end_time).slice(0, 5),
       location: r.location || '', mode: r.mode, travelMin: r.travel_min, bufferMin: r.buffer_min,
       visibility: r.visibility, trip: r.trip, briefing: r.briefing || {}, status: r.status,
-      ackAt: r.ack_at, createdBy: r.created_role, masked: !!r.masked, origin: r.origin || '', nudgedAt: r.nudged_at || null,
+      ackAt: r.ack_at, createdBy: r.created_role, createdAt: r.created_at || null, masked: !!r.masked, origin: r.origin || '', nudgedAt: r.nudged_at || null,
       actual: r.actual || {}, series: r.series || null, invitedAt: this._invitedAt(r.actual),
       pickupChanged: r.pickup_changed || (r.actual && r.actual.pickupChanged) || null,   // 기사 피드는 실제 기록 대신 이것만 내려줘요
     };
