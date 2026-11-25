@@ -241,6 +241,19 @@
       return prev.location;
     },
 
+    /** s 가 대표 개인 일정('바쁨' · 비서에겐 가려진 일정)과 시간이 실제로 겹치면 그 일정 (없으면 null).
+     *  이동 시간은 빼고 일정 시작~종료만 비교해요 (끝이 시작보다 빠르면 다음 날 끝). 전날 밤에서 이어지는 개인 일정도 봐요.
+     *  비서 등록 창 '대표님 개인 일정과 겹쳐요' 확인 창이 써요 (2026-11-25) */
+    busyClash(all, s) {
+      if (!s || !s.date || !s.start || s.masked || s.visibility === 'private') return null;
+      const span = x => { const a = U.at(x.date, x.start); let b = U.at(x.date, x.end || x.start); if (b <= a) b = U.addMin(b, 24 * 60); return [a, b]; };
+      const [a1, b1] = span(s);
+      return (all || []).filter(x => x && x.id !== s.id && x.status !== 'cancelled' && (x.masked || x.visibility === 'private')
+        && (x.date === s.date || x.date === U.addDays(s.date, -1) || x.date === U.addDays(s.date, 1)))
+        .map(x => ({ x, t: span(x) })).filter(({ t }) => t[0] < b1 && a1 < t[1])
+        .sort((p, q) => p.t[0] - q.t[0]).map(({ x }) => x)[0] || null;
+    },
+
     /** 늦을 때 도착 예상 — 시작 시각 + 늦는 분 ('10분 늦어요' → 11:00 미팅이면 11:10쯤 도착).
      *  대표 앱 '10분 늦어요' · 비서에게 알리기 · AI 비서 '15분 늦어' · 상대방 문자 초안이 모두 이 규칙을 써요 */
     lateArrive(s, min) { return U.addMin(U.at(s.date, s.start), Math.max(0, Number(min) || 0)); },

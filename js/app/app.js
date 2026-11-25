@@ -217,6 +217,29 @@ const App = {
     return pl.items.filter(it => want.includes(it.kind) && !seen.has(it.kind) && seen.add(it.kind)).map(it => ({ kind: it.kind, label: names[it.kind], at: it.at }));
   },
 
+  /** 비서가 방금(3시간 안) 넣은 오늘 남은 일정 — 큰 카드에 없는 것 1건 (2026-11-25).
+   *  쓰는 값: createdBy 'secretary'(created_role) · createdAt(created_at) · ackAt. 대표가 [확인]하면 이 기기에 일정 id 를 기억해 다시 안 보여요 */
+  FRESH_MIN: 180,
+  freshSeen() { try { const v = JSON.parse(localStorage.getItem('CEOP_FRESH_SEEN') || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } },
+  freshAdd(heroId) {
+    const now = new Date(), seen = this.freshSeen();
+    const age = s => U.diffMin(now, new Date(s.createdAt));
+    return this.dayPlan(U.today()).filter(({ s, p }) => s.id !== heroId && s.createdBy === 'secretary' && s.createdAt && !s.ackAt && s.visibility !== 'private'
+      && s.status !== 'cancelled' && !seen.includes(s.id) && p.startAt > now && age(s) >= -5 && age(s) <= this.FRESH_MIN)
+      .sort((a, b) => String(b.s.createdAt).localeCompare(String(a.s.createdAt)))[0] || null;
+  },
+  /** 큰 카드 아래 한 줄: '비서가 방금 추가 · 13:10' / '15:00 삼성동 긴급 미팅' / '14:00 출발 · 기사 13:50 대기' [확인] */
+  freshRow(heroId) {
+    const hit = this.freshAdd(heroId);
+    if (!hit) return '';
+    const { s, p: pl } = hit;
+    const sub = s.mode && s.mode !== 'none'
+      ? [`${U.hm(pl.leaveAt)} 출발`, Backtime.driverLeg(s) && pl.driverCallAt && !pl.pickupOnly ? `기사 ${U.hm(pl.driverCallAt)} 대기` : (Backtime.MODES[s.mode] || {}).label || ''].filter(Boolean).join(' · ')
+      : s.location || '';
+    return `<div class="fresh-add"><div><small>비서가 방금 추가 · ${U.hm(new Date(s.createdAt))}</small><b>${s.start} ${U.esc(s.title)}</b>${sub ? `<span>${U.esc(sub)}</span>` : ''}</div>
+      <button class="fa-ok" data-freshok="${s.id}" aria-label="'${U.esc(s.title)}' 확인">확인</button></div>`;
+  },
+
   hero() {
     const p = this.profile();
     const now = new Date();
@@ -224,7 +247,7 @@ const App = {
     const top = `<div class="hero-top"><div class="hello"><small>${this.longDate(U.today())}</small><b>${U.esc(p.name || '대표')}님, ${this.greet()}</b></div>
       <button class="hero-bell" data-bell aria-label="공지사항${fresh ? ` (새 공지 ${fresh}개)` : ''}">${Icon.svg('bell', 20)}${fresh ? '<i></i>' : ''}</button></div>`;
     const n = this.next();
-    if (!n) return `<header class="hero">${top}<div class="next-card rest"><b>남은 일정이 없어요</b><span>내일 일정은 비서가 정리하면 여기에 보여요.</span></div></header>`;
+    if (!n) return `<header class="hero">${top}<div class="next-card rest"><b>남은 일정이 없어요</b><span>내일 일정은 비서가 정리하면 여기에 보여요.</span></div>${this.freshRow(null)}</header>`;
     const { s, p: pl } = n;
     const priv = s.visibility === 'private';
     const steps = this.steps(s, pl);
@@ -279,7 +302,7 @@ const App = {
           <span class="pill ${lateOn ? 'lt' : overdue ? 'late' : ''}">${pill}</span></div>
         ${stepHtml}${this.pickupLine(s, pl, now)}${lateSent ? `<p class="drv-line late-sent">${Icon.svg('clock', 17)}<span><b class="num">${U.hm(lateSent.arriveAt)}쯤 도착</b> (${lateSent.min}분 늦음)<small>${Icon.svg('check', 12)} 비서에게 알림 ${U.hm(lateSent.at)}</small></span></p>` : ''}${this.driverLine(s, lateSent)}${pl.pickup ? `<p class="drv-line pickup">${Icon.svg('car', 15)} 도착하면 기사님이 ${U.esc([pl.pickup.station, pl.pickup.spot].filter(Boolean).join(' ') || '도착 출구')}에서 대기 · <b class="num">${U.hm(pl.pickup.waitAt)}</b><small>도착 ${U.hm(pl.pickup.arriveAt)} + 짐 ${pl.pickup.bagMin}분</small></p>` : ''}
         <div class="nc-acts n${acts.length}">${acts.join('')}</div>${ack}
-      </div></header>`;
+      </div>${this.freshRow(s.id)}</header>`;
   },
 
   dayList() {
@@ -731,6 +754,13 @@ const App = {
       U.toast('비서에게 알렸어요. 상대방 연락은 비서가 해요');
     }));
     on('[data-ack]', safe(async el => { await Store.ack(el.dataset.ack); U.toast('확인했어요. 비서에게 전달됐어요'); }));
+    // '비서가 방금 추가' 한 줄 [확인]: 이 기기에 기억(다시 안 보임) + 일정 확인(비서 웹에 '확인함')
+    on('[data-freshok]', safe(async el => {
+      const id = el.dataset.freshok;
+      try { localStorage.setItem('CEOP_FRESH_SEEN', JSON.stringify([...this.freshSeen().filter(x => x !== id), id].slice(-50))); } catch { /* */ }
+      el.closest('.fresh-add')?.remove();
+      await Store.ack(id); U.toast('확인했어요. 비서에게 전달됐어요');
+    }));
     on('[data-brief]', el => this.briefing(el.dataset.brief));
     on('[data-late]', safe(async el => {
       const s = Store.get(el.dataset.late); if (!s) return;
