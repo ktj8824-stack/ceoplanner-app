@@ -84,10 +84,20 @@ const App = {
     const root = document.getElementById('root');
     const ps = Plan.state();
     document.getElementById('tabs').hidden = !ps.active;
-    if (!ps.active) { root.innerHTML = demo + `<div class="plan-lock-wrap">${Plan.lockHtml()}</div>`; Plan.bindLock(root); return; }
+    if (!ps.active) { root.innerHTML = demo + `<div class="plan-lock-wrap">${U.iosApp() ? this.lockHtmlIOS() : Plan.lockHtml()}</div>`; Plan.bindLock(root); return; }
     root.innerHTML = demo + { home: () => this.home(), chat: () => this.chat(), sos: () => this.sos(), me: () => this.me() }[this.tab]();
     this.bind(root);
     this.updateChatDot();
+  },
+
+  /** 아이폰 앱: 기간이 끝났을 때 — 요금 · 결제 버튼 · 바깥 결제 안내 없이 한 줄만 (앱스토어 3.1.1) */
+  lockHtmlIOS() {
+    return `<div class="plan-lock card" role="alertdialog" aria-labelledby="lockT">
+      <h2 id="lockT">이용 기간이 끝났어요</h2>
+      <p>담당 비서 또는 관리자에게 문의해 주세요.</p>
+      <p class="muted small">일정 · 비서톡 기록은 그대로 보관돼 있어요.</p>
+      ${Store.mode === 'supabase' ? '<button class="btn quiet" data-logout>로그아웃</button>' : '<button class="btn quiet" data-plan-reset>데모: 체험 기간 다시 시작</button>'}
+    </div>`;
   },
 
   profile() { return Store.profile(); },
@@ -469,11 +479,12 @@ const App = {
           ${row('data-edit="prep"', '아침 준비 · 출근 시간', `준비 ${U.durLabel(p.prepMin || 60)} · 출근 ${U.durLabel(p.commuteMin || 40)}`)}
           ${row('data-autonav', '차에 타면 자동 길안내', '', '차와 연결되면 다음 일정 장소로 내비가 켜져요')}
           ${row('data-edit="name"', '이름', p.name || '')}
+          ${this.voiceConsentRow()}
           ${sizes}</div></section>
         <section class="group"><h2>구독</h2><div class="box">
-          ${Plan.isFree() ? `<div class="set-row"><span class="l">${U.esc(Plan.NAMES.free)}<small>${U.esc(Plan.summary())}</small></span></div>` : `<a class="set-row" href="${U.esc(Plan.payUrl())}"><span class="l">${U.esc(Plan.NAMES[ps.plan])}<small>${U.esc(Plan.summary())}${Plan.payNote() ? '<br>' + U.esc(Plan.payNote()) : ''}</small></span><span class="v strong">${ps.plan === 'trial' || ps.plan === 'expired' ? '결제' : '연장'}${Icon.svg('chevron', 16)}</span></a>`}</div></section>
+          ${Plan.isFree() || U.iosApp() ? `<div class="set-row"><span class="l">${U.esc(Plan.NAMES[ps.plan])}<small>${U.esc(Plan.summary())}</small></span></div>` : `<a class="set-row" href="${U.esc(Plan.payUrl())}"><span class="l">${U.esc(Plan.NAMES[ps.plan])}<small>${U.esc(Plan.summary())}${Plan.payNote() ? '<br>' + U.esc(Plan.payNote()) : ''}</small></span><span class="v strong">${ps.plan === 'trial' || ps.plan === 'expired' ? '결제' : '연장'}${Icon.svg('chevron', 16)}</span></a>`}</div></section>
         ${Store.mode === 'demo' ? '' : `<section class="group"><div class="box"><button type="button" class="set-row logout-row" data-logout>로그아웃</button></div></section>`}
-        <p class="me-foot">${Store.mode === 'demo' ? `<button data-reset>데모 데이터 처음으로</button>${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''} · ` : ''}<a href="privacy.html" target="_blank">개인정보 처리방침</a> · <button data-withdraw>회원 탈퇴</button> · 버전 1.0</p>
+        <p class="me-foot">${Store.mode === 'demo' ? `<button data-reset>데모 데이터 처음으로</button>${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''} · ` : ''}<a href="support.html" target="_blank">도움말 · 문의</a> · <a href="privacy.html" target="_blank">개인정보 처리방침</a> · <a href="terms.html" target="_blank">이용약관</a> · <button data-withdraw>회원 탈퇴</button> · 버전 1.0</p>
       </div>`;
   },
 
@@ -572,8 +583,43 @@ const App = {
     m.querySelector('[name=title]').focus();
   },
 
+  // ───────── 음성 입력 동의 (앱스토어 5.1.2 · 처음 녹음하기 전에 한 번) ─────────
+  // 개인정보 처리방침 1·4·6번과 같은 말: 녹음은 OpenAI(미국)로 보내 받아쓰고, 끝나면 바로 버림 (저장 · 학습 안 함)
+  VOICE_KEY: 'ceop_voice_consent',
+  voiceConsent() { try { return !!localStorage.getItem(this.VOICE_KEY); } catch { return false; } },
+  setVoiceConsent(on) { try { on ? localStorage.setItem(this.VOICE_KEY, new Date().toISOString()) : localStorage.removeItem(this.VOICE_KEY); } catch { /* 저장소 막힘 — 다음에 또 여쭤봐요 */ } },
+  /** 동의 창 (어두운 음성 화면 위) → 동의하면 true */
+  askVoiceConsent(host) {
+    return new Promise(resolve => {
+      const w = document.createElement('div');
+      w.className = 'vc-back';
+      w.innerHTML = `<div class="vc-sheet" role="dialog" aria-modal="true" aria-labelledby="vcT">
+        <span class="vc-ico">${Icon.svg('mic', 26)}</span>
+        <h3 id="vcT">음성 입력 안내</h3>
+        <p class="vc-main">음성은 글자로 바꾸기 위해 OpenAI(미국)로 보내져요. 바꾼 뒤 음성은 바로 버리고 저장하지 않아요.</p>
+        <ul><li>녹음은 한 번에 최대 30초, 모델 학습에 쓰이지 않아요</li><li>마이크 대신 글로 적으면 음성을 보내지 않아요</li><li>'내 정보'에서 언제든 동의를 거둘 수 있어요</li></ul>
+        <a class="vc-link" href="privacy.html" target="_blank">개인정보 처리방침 보기</a>
+        <div class="vc-do"><button type="button" class="vc-no" data-vc-no>취소</button><button type="button" class="vc-yes" data-vc-yes>동의하고 계속</button></div></div>`;
+      const done = ok => { w.remove(); if (ok) this.setVoiceConsent(true); resolve(ok); };
+      w.querySelector('[data-vc-yes]').addEventListener('click', e => { e.stopPropagation(); done(true); });
+      w.querySelector('[data-vc-no]').addEventListener('click', e => { e.stopPropagation(); done(false); });
+      (host || document.body).appendChild(w);
+      w.querySelector('[data-vc-yes]').focus();
+    });
+  },
+  voiceConsentRow() {
+    const on = this.voiceConsent();
+    return `<button class="set-row" data-voiceconsent><span class="l">음성 입력 동의<small>${on ? '음성을 OpenAI(미국)로 보내 글자로 바꿔요 (저장 안 함)' : '마이크를 처음 쓸 때 여쭤봐요'}</small></span><span class="v">${on ? '동의함' : '안 함'}${Icon.svg('chevron', 16)}</span></button>`;
+  },
+
   // ───────── AI 비서 (데모: 정해진 말투만 · 서버 연결 후 실제 AI로 교체) ─────────
   openAI() {
+    if (!Plan.can('ai') && U.iosApp()) {
+      // 아이폰 앱: 요금 · 요금제 바꾸기 버튼 없이 안내만 (앱스토어 3.1.1)
+      return this.modal(`<div class="ai"><div class="ai-head"><span class="ico">${Icon.svg('mic', 20)}</span><div><h3>AI 비서</h3></div><button class="sq" data-close aria-label="닫기">${Icon.svg('x', 18)}</button></div>
+        <p style="margin:4px 0 12px;font-size:1.05em">지금은 AI 비서를 쓸 수 없어요. 담당 비서 또는 관리자에게 문의해 주세요.</p>
+        <button class="btn" style="width:100%" data-close>닫기</button></div>`);
+    }
     if (!Plan.can('ai')) {
       const m = this.modal(`<div class="ai"><div class="ai-head"><span class="ico">${Icon.svg('mic', 20)}</span><div><h3>AI 비서</h3><p>지금 요금제: ${U.esc(Plan.NAMES[Plan.state().plan])}</p></div><button class="sq" data-close aria-label="닫기">${Icon.svg('x', 18)}</button></div>
         <p style="margin:4px 0 12px;font-size:1.05em">AI 비서는 <b>'AI 비서 포함'</b> 요금제(월 ${Plan.won(Plan.PRICES.premium)}, VAT 별도)에서 쓸 수 있어요. 말로 일정을 넣고 바꾸고 미룰 수 있어요.</p>
@@ -689,7 +735,15 @@ const App = {
         rec.start();
       } catch { state.textContent = '마이크를 쓸 수 없어요. 글로 적어 주세요'; f.hidden = false; }
     };
-    if (mic) { mic.addEventListener('click', listen); listen(); }
+    // 처음 녹음하기 전에 음성 입력 동의 (취소하면 글로 쓰기 · 마이크를 다시 누르면 또 여쭤봐요)
+    const start = async () => {
+      if (!this.voiceConsent() && !(typeof ServerVoice !== 'undefined' && ServerVoice.active())) {
+        if (!(await this.askVoiceConsent(back))) { state.textContent = '글로 적어 주세요 · 마이크를 누르면 다시 여쭤볼게요'; f.hidden = false; return; }
+      }
+      listen();
+    };
+    if (mic && !this.voiceConsent()) state.textContent = '마이크를 눌러 말씀해 주세요';
+    if (mic) { mic.addEventListener('click', start); start(); }
     else f.q.focus();
   },
 
@@ -789,6 +843,12 @@ const App = {
     on('[data-exitdemo]', () => Store.exitDemo());
     on('[data-tabgo]', el => this.go(el.dataset.tabgo));
     on('[data-autonav]', () => AutoNav.openGuide());
+    on('[data-voiceconsent]', () => {
+      if (this.voiceConsent()) {
+        if (!confirm('음성 입력 동의를 거둘까요?\n거두면 AI 비서는 글로 적어서 쓰고, 마이크를 누를 때 다시 여쭤봐요.')) return;
+        this.setVoiceConsent(false); U.toast('음성 입력 동의를 거뒀어요'); this.render();
+      } else this.askVoiceConsent().then(ok => { if (ok) { U.toast('음성 입력에 동의했어요'); this.render(); } });
+    });
     on('[data-edit]', el => { if (el.dataset.edit === 'notif') return U.toast('알림을 끄려면 브라우저 설정에서 바꿔 주세요'); this.editProfile(el.dataset.edit); });
     on('[data-size]', el => { localStorage.setItem('CEOP_FONT', el.dataset.size); this.applySize(); this.render(); });
     on('[data-reset]', () => { if (confirm('데모 데이터를 처음 상태로 되돌릴까요?')) Store.resetDemo(); });
