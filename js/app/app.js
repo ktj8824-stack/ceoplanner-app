@@ -96,9 +96,12 @@ const App = {
       <h2 id="lockT">이용 기간이 끝났어요</h2>
       <p>담당 비서 또는 관리자에게 문의해 주세요.</p>
       <p class="muted small">일정 · 비서톡 기록은 그대로 보관돼 있어요.</p>
-      ${Store.mode === 'supabase' ? '<button class="btn quiet" data-logout>로그아웃</button>' : '<button class="btn quiet" data-plan-reset>데모: 체험 기간 다시 시작</button>'}
+      ${Store.mode === 'supabase' ? '<button class="btn quiet" data-logout>로그아웃</button>' : '<button class="btn quiet" data-plan-reset>데모: 처음 상태로</button>'}
     </div>`;
   },
+  /** 아이폰 앱: 요금제 이름 · 한 줄 요약에서 '무료 · 체험' 글자 빼기 (앱스토어 3.1.1, 안드로이드 · 웹은 그대로) */
+  planName(ps) { return U.iosApp() && (ps.plan === 'free' || ps.plan === 'trial') ? '이용 중' : Plan.NAMES[ps.plan]; },
+  planSummary(ps) { return U.iosApp() && (ps.plan === 'free' || ps.plan === 'trial') ? '모든 기능 이용 중 (AI 비서 포함)' : Plan.summary(); },
 
   profile() { return Store.profile(); },
   dayPlan(ymd) { return Backtime.planDay(Store.byDate(ymd).filter(s => s.status !== 'cancelled'), { prepMin: this.profile().prepMin, commuteMin: this.profile().commuteMin }); },
@@ -469,7 +472,7 @@ const App = {
       <div class="me">
         <div class="me-card"><span class="av big">${U.esc((p.name || '대').slice(0, 1))}</span>
           <span class="who"><b>${U.esc(p.name || '대표')}</b><small>${Store.myLogin ? '아이디 ' + U.esc(Store.myLogin) : '비서실과 연결됨'}</small></span>
-          <span class="plan-badge ${ps.plan}">${U.esc(Plan.NAMES[ps.plan])}</span></div>
+          <span class="plan-badge ${ps.plan}">${U.esc(this.planName(ps))}</span></div>
         <section class="group"><h2>함께 일하는 사람</h2><div class="box">
           ${person((p.secretaryName || '비').slice(0, 1), p.secretaryName || '비서', '비서', p.secretaryPhone, true)}
           ${person((p.driverName || '기').slice(0, 1), p.driverName || '기사님', '기사', p.driverPhone, false)}
@@ -481,8 +484,8 @@ const App = {
           ${row('data-edit="name"', '이름', p.name || '')}
           ${this.voiceConsentRow()}
           ${sizes}</div></section>
-        <section class="group"><h2>구독</h2><div class="box">
-          ${Plan.isFree() || U.iosApp() ? `<div class="set-row"><span class="l">${U.esc(Plan.NAMES[ps.plan])}<small>${U.esc(Plan.summary())}</small></span></div>` : `<a class="set-row" href="${U.esc(Plan.payUrl())}"><span class="l">${U.esc(Plan.NAMES[ps.plan])}<small>${U.esc(Plan.summary())}${Plan.payNote() ? '<br>' + U.esc(Plan.payNote()) : ''}</small></span><span class="v strong">${ps.plan === 'trial' || ps.plan === 'expired' ? '결제' : '연장'}${Icon.svg('chevron', 16)}</span></a>`}</div></section>
+        <section class="group"><h2>${U.iosApp() ? '이용 상태' : '구독'}</h2><div class="box">
+          ${Plan.isFree() || U.iosApp() ? `<div class="set-row"><span class="l">${U.esc(this.planName(ps))}<small>${U.esc(this.planSummary(ps))}</small></span></div>` : `<a class="set-row" href="${U.esc(Plan.payUrl())}"><span class="l">${U.esc(Plan.NAMES[ps.plan])}<small>${U.esc(Plan.summary())}${Plan.payNote() ? '<br>' + U.esc(Plan.payNote()) : ''}</small></span><span class="v strong">${ps.plan === 'trial' || ps.plan === 'expired' ? '결제' : '연장'}${Icon.svg('chevron', 16)}</span></a>`}</div></section>
         ${Store.mode === 'demo' ? '' : `<section class="group"><div class="box"><button type="button" class="set-row logout-row" data-logout>로그아웃</button></div></section>`}
         <p class="me-foot">${Store.mode === 'demo' ? `<button data-reset>데모 데이터 처음으로</button>${Store.forcedDemo ? ' · <button data-exitdemo>데모 끝내기</button>' : ''} · ` : ''}<a href="support.html" target="_blank">도움말 · 문의</a> · <a href="privacy.html" target="_blank">개인정보 처리방침</a> · <a href="terms.html" target="_blank">이용약관</a> · <button data-withdraw>회원 탈퇴</button> · 버전 1.0</p>
       </div>`;

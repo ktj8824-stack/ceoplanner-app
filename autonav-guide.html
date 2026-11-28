@@ -295,7 +295,7 @@ html.embed .top{display:none}
     <details><summary>일정이 끝났는데 또 안내하나요?</summary><p>아니요. 지난 일정은 건너뛰고 지금 가야 할 일정 장소로만 안내해요. 오늘 이동이 다 끝났으면 "수고하셨습니다"로 끝나요.</p></details>
     <details><summary>가족 차를 탈 때도 켜지나요?</summary><p>등록한 차(CarPlay 또는 고른 블루투스 기기)에 연결될 때만 켜져요. 원하지 않을 땐 내비를 닫으면 돼요.</p></details>
     <details><summary>로그인을 매번 해야 하나요?</summary><p>아니요. 앱에서 한 번 로그인해 두면 그다음부터 바로 안내돼요. 브라우저로 쓰는 경우엔 같은 브라우저에서 로그인해 두세요.</p></details>
-    <details><summary>무료로도 쓸 수 있나요?</summary><p>네. 자동 길안내는 추가 비용 없이 쓸 수 있어요.</p></details>
+    <details id="faq-cost"><summary>무료로도 쓸 수 있나요?</summary><p>네. 자동 길안내는 추가 비용 없이 쓸 수 있어요.</p></details>
   </div>
 </section>
 
@@ -315,6 +315,8 @@ html.embed .top{display:none}
 
 <script>
 (function () {
+  // 아이폰 앱(파일로 열림 · 알림 다리): 비용 질문은 숨김 (앱스토어 3.1.1)
+  try { if (location.protocol === 'file:' || (window.webkit && window.webkit.messageHandlers && (window.webkit.messageHandlers.ceoAlarms || (window.parent !== window && window.parent.webkit && window.parent.webkit.messageHandlers.ceoAlarms)))) { var fc = document.getElementById('faq-cost'); if (fc) fc.remove(); } } catch (x) { }
   // 앱 화면 위에 띄운 경우: 'CEO플래너 열기'·로고는 가이드를 닫고 앱으로
   var embed = new URLSearchParams(location.search).get('embed') === '1' && window.parent !== window;
   if (embed) {
