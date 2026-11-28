@@ -22,6 +22,11 @@ const U = {
     const b = p.replace(/\s*(B|b|지하\s*)?\d+\s*층.*$|\s*\d+\s*호.*$|\s*(대|소|중)?회의실.*$|\s*(접견실|사무실|대표실|임원실|라운지).*$/, '').trim();
     return b || p;
   },
+  /** 아이폰 앱(Xcode 껍데기) 안인가 — 앱 안 www/ 파일로 열리거나(file:) 아이폰 알림 다리(ceoAlarms)가 있으면.
+   *  앱스토어 규칙(3.1.1)대로 아이폰 앱에서는 요금 · 결제 버튼 · 결제 링크를 보이지 않아요 (안드로이드 · 웹은 그대로) */
+  iosApp() {
+    try { return location.protocol === 'file:' || !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ceoAlarms); } catch { return false; }
+  },
   /** 연결 실패 화면 (대표 앱 · 비서 웹 · 기사님 · 결제 공용) — '다시 시도' 버튼 */
   failBox(err) {
     const msg = (err && err.message) || String(err || '');
